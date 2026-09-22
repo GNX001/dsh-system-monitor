@@ -1,5 +1,7 @@
 # dsh-system-monitor
 
+**作者：DeepSeek + DeepSeek-Harness**
+
 中文 | [English](README.en.md)
 
 给 **DeepSeek Harness** Web 界面用的悬浮状态条：CPU、内存、每一块 GPU 与网速，
@@ -362,4 +364,11 @@ npm run dev                    # 在 :43199 挂上宿主半边，并提供一个
 
 ## 许可证
 
-MIT —— 见 [LICENSE](LICENSE)。
+**The Unlicense** —— 完全自由开源，无任何使用条件。
+
+本仓库放弃全部著作权，将软件释入公有领域：任何人都可以出于任何目的、以任何方式自由复制、
+修改、发布、使用、编译、出售或分发本软件（源码或二进制形式均可，商业或非商业均可），
+**无需署名、无需保留任何声明、无需遵守任何条款**。
+
+全文见 [LICENSE](LICENSE)，或 <https://unlicense.org>。和任何公有领域释出一样，软件按
+「原样」提供，不附带任何担保。

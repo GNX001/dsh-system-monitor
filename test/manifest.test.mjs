@@ -14,7 +14,8 @@ const manifest = JSON.parse(await read('package.json'))
 test('package.json describes a DSH client plugin', () => {
   assert.equal(manifest.name, 'dsh-system-monitor')
   assert.equal(manifest.type, 'module')
-  assert.equal(manifest.license, 'MIT')
+  // The Unlicense: released into the public domain with no conditions on use.
+  assert.equal(manifest.license, 'Unlicense')
   assert.equal(manifest.main, 'lib/index.js')
 
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
@@ -113,4 +114,41 @@ test('both READMEs document install, routes, privacy and the platforms', async (
   assert.match(en, /loopback/i)
   assert.match(zh, /网速/)
   assert.match(en, /network throughput/i)
+})
+
+test('both READMEs credit the author on the first line under the title', async () => {
+  for (const [name, expected] of [
+    ['README.md', '**作者：DeepSeek + DeepSeek-Harness**'],
+    ['README.en.md', '**Author: DeepSeek + DeepSeek-Harness**'],
+  ]) {
+    const lines = (await read(name)).split('\n')
+    assert.equal(lines[0], '# dsh-system-monitor', `${name}: the title comes first`)
+    assert.equal(lines[1], '', `${name}: blank line after the title`)
+    assert.equal(lines[2], expected, `${name}: the author byline is the first line under the title`)
+  }
+})
+
+test('the release is public domain and carries no conditions', async () => {
+  const license = await read('LICENSE')
+
+  // The Unlicense dedicates the work to the public domain. MIT would not do:
+  // it conditions use on keeping the copyright notice.
+  assert.match(license, /free and unencumbered software released into the public domain/)
+  assert.match(license, /dedicate any and all copyright interest in the\s+software to the public domain/)
+  assert.match(license, /For more information, please refer to <https:\/\/unlicense\.org>/)
+  assert.doesNotMatch(license, /MIT License/)
+  assert.doesNotMatch(license, /The above copyright notice and this permission notice shall be included/)
+
+  // No document may still advertise MIT.
+  for (const name of ['README.md', 'README.en.md', 'package.json']) {
+    assert.doesNotMatch(await read(name), /\bMIT\b/, `${name} must not claim MIT any more`)
+  }
+  for (const name of ['README.md', 'README.en.md']) {
+    const text = await read(name)
+    assert.match(text, /Unlicense/, `${name}: names the license`)
+    assert.match(text, /LICENSE/, `${name}: links the full text`)
+  }
+  // The Chinese document states the no-conditions grant in Chinese.
+  assert.match(await read('README.md'), /无任何使用条件/)
+  assert.match(await read('README.en.md'), /with no conditions on use/)
 })

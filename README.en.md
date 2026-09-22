@@ -1,5 +1,7 @@
 # dsh-system-monitor
 
+**Author: DeepSeek + DeepSeek-Harness**
+
 [中文](README.md) | English
 
 A floating status capsule for the **DeepSeek Harness** web GUI: CPU, memory, every
@@ -410,4 +412,12 @@ Run `npm run build` before `npm test` after touching anything under `src/client/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**The Unlicense** — completely free, with no conditions on use.
+
+This software is released into the public domain: anyone may copy, modify,
+publish, use, compile, sell or distribute it, in source or binary form, for any
+purpose, commercial or non-commercial, **with no attribution, no notice to keep
+and no terms to comply with**.
+
+See [LICENSE](LICENSE) for the full text, or <https://unlicense.org>. As with any
+public-domain release, the software comes as-is, with no warranty.
