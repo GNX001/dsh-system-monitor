@@ -1,0 +1,14 @@
+# Dependencies are dev-only; the plugin itself ships with none.
+node_modules/
+
+# Local npm cache used when the default cache directory is not writable.
+.npm-cache/
+
+# Build/QA scratch
+*.log
+_bundle-out.txt
+_bundle-err.txt
+
+# OS noise
+.DS_Store
+Thumbs.db

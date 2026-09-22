@@ -1,0 +1,17 @@
+# Store every text file with LF and check it out with LF, so a Windows
+# contributor's working copy cannot rewrite the whole repo on the first commit.
+* text=auto eol=lf
+
+# Binary fixtures and images must never be line-ending-converted.
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+
+# Keep the lockfile diffable and out of linguist noise.
+package-lock.json text eol=lf
+
+# These fixtures are byte-faithful captures of real tool output, including the
+# padding whitespace typeperf prints on stdout. Whitespace linting must not
+# "fix" them, or the parsers would stop being tested against reality.
+test/fixtures/** -whitespace

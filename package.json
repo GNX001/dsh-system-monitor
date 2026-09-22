@@ -1,0 +1,79 @@
+{
+  "name": "dsh-system-monitor",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 系统监视悬浮磁贴插件：CPU / 内存 / 多 GPU 的占用率、温度、显存与功耗实时显示。A floating system-monitor tile plugin for DeepSeek Harness: live CPU, memory and multi-GPU usage, temperature, VRAM and power draw.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    },
+    "compatibility": {
+      "dsh": ">=0.1.5-rc.1",
+      "profiles": [
+        "web",
+        "desktop"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/",
+    "test:inline": "node tools/run-tests.mjs",
+    "verify": "node scripts/build.mjs && node --test test/",
+    "dev": "node tools/dev-server.mjs"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "client-plugin",
+    "system-monitor",
+    "cpu",
+    "gpu",
+    "memory",
+    "temperature",
+    "nvidia-smi",
+    "telemetry",
+    "widget"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

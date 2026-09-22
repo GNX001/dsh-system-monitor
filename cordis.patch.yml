@@ -1,0 +1,9 @@
+# dsh-system-monitor bundle patch: one host row over the web profile.
+#
+# The row name resolves from the profile's own node_modules, where
+# `dsh plugin --profile web add dsh-system-monitor` (or `link:<path>`) put it.
+# The host half only serves read-only JSON over loopback; the floating tile is
+# the browser half declared by `dsh.client` in package.json.
+- insert:
+    - id: system-monitor
+      name: dsh-system-monitor
