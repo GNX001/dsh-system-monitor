@@ -61,7 +61,16 @@ GPU 的占用率、温度、显存与功耗收进一块可拖动的玻璃质感�
 
 ## 安装
 
-### 从本地克隆安装（现在就能用）
+### 直接从本仓库安装（推荐）
+
+```sh
+dsh plugin --profile web add github:GNX001/dsh-system-monitor
+```
+
+无需构建：浏览器半边的产物 `lib/client.js` 已随仓库提交，所以从 git 安装即可。目前
+还没有 npm 发布。
+
+### 从本地克隆安装
 
 ```sh
 git clone https://github.com/GNX001/dsh-system-monitor.git
@@ -77,6 +86,10 @@ dsh plugin --profile web add dsh-system-monitor
 
 安装后重启 `dsh web`（或 DSH Desktop）。磁贴会出现在右上角，并在
 **设置 → 系统监视磁贴** 中出现对应的配置分区。
+
+> **DSH Desktop 说明。** 桌面版自己拉起 Harness 服务，所以插件安装要等下次重启
+> DSH Desktop 才生效。如果你的 `PATH` 里没有 `dsh`，用桌面版自带的那份也能跑，例如
+> `node "$env:APPDATA\dsh-desktop\harness\profiles\node_modules\@deepseek-ai\dsh\lib\bin.js" plugin --profile web add github:GNX001/dsh-system-monitor`。
 
 ## 使用
 

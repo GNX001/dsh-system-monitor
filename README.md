@@ -67,7 +67,16 @@ does not exist, that one reading is blank and the rest keep working.
 
 ## Install
 
-### From a local checkout (works today)
+### Straight from this repository (recommended)
+
+```sh
+dsh plugin --profile web add github:GNX001/dsh-system-monitor
+```
+
+No build step is needed: the bundled browser half (`lib/client.js`) is committed,
+so installing from git is enough. There is no npm release yet.
+
+### From a local checkout
 
 ```sh
 git clone https://github.com/GNX001/dsh-system-monitor.git
@@ -83,6 +92,12 @@ dsh plugin --profile web add dsh-system-monitor
 
 Restart `dsh web` (or DSH Desktop) after installing. The tile appears in the
 top-right corner, and **Settings → System monitor tile** gains a section for it.
+
+> **DSH Desktop note.** The desktop shell starts the Harness server itself, so a
+> plugin install only takes effect on the next restart of DSH Desktop. If `dsh`
+> is not on your `PATH`, the same command works through the copy the desktop
+> ships — for example
+> `node "$env:APPDATA\dsh-desktop\harness\profiles\node_modules\@deepseek-ai\dsh\lib\bin.js" plugin --profile web add github:GNX001/dsh-system-monitor`.
 
 ## Usage
 
