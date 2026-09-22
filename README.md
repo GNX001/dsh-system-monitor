@@ -1,80 +1,73 @@
 # dsh-system-monitor
 
-English | [中文](README.zh.md)
+中文 | [English](README.en.md)
 
-A floating status capsule for the **DeepSeek Harness** web GUI: CPU, memory, every
-GPU and network throughput as one line of plain text.
+给 **DeepSeek Harness** Web 界面用的悬浮状态条：CPU、内存、每一块 GPU 与网速，
+全部排成一行纯文字。
 
 ```
   ⣿ CPU 9.6% 78.9°C 丨 MEM 43% 13.4/31.2 GB 丨 GPU 0% 51°C 0/11.9 GB 丨 网速 ↓ 1.3 MB/s ↑ 240 KB/s  ⟳ ✕
 ```
 
-*(A layout sketch, not a screenshot. The real colors come from your DSH theme —
-see [Theming and stacking](#theming-and-stacking).)*
+*（这是排版示意图，不是截图。实际配色来自你自己的 DSH 主题，详见
+[主题与层叠](#主题与层叠)。）*
 
-## Features
+## 功能
 
-- **One line, text only** — a horizontal capsule: drag grip, then each metric
-  separated by `丨`, then refresh and hide. No bars, gauges or sparklines; it is a
-  readout, not a chart. It wraps onto a second line rather than clipping a metric
-  on a narrow window.
-- **CPU** — utilization and temperature. The full model name and thread count are
-  in the item's tooltip, so the line stays short without losing them.
-- **Memory** — used/total in a shared unit, using the same "available" accounting
-  Windows Task Manager and macOS Activity Monitor show.
-- **Every GPU** — one item per adapter with utilization, temperature, VRAM and
-  (optionally) power draw. A hybrid laptop reports both the discrete and the
-  integrated GPU.
-- **网速 / NET** — download and upload throughput, from the operating system's own
-  network counters, with loopback and virtual adapters excluded so the total is
-  not double-counted.
-- **Follows your DSH theme** — every color is a DSH design token, so the capsule
-  matches the built-in light/dark switch and third-party themes such as
-  Catppuccin, and re-tints the instant you change theme.
-- **Floating and draggable** — drag it by anywhere on the capsule (buttons
-  excluded); the position and opacity persist across reloads.
-- **Honest about missing data** — a counter the platform does not implement shows
-  `—`, never a fabricated `0`. A missing vendor tool degrades one metric, it never
-  blanks the capsule.
-- **Loopback-only, read-only** — the host half serves two GET routes fenced to
-  the local machine. No writes, no network egress, no elevation, no drivers.
-- **Bilingual** — English and Chinese, following the DSH locale setting.
+- **一行纯文字** —— 一条横向状态条：拖动把手，然后是各项指标（用 `丨` 分隔），最后是
+  刷新与隐藏按钮。没有进度条、仪表盘或迷你图；它是读数，不是图表。窗口太窄时会折到
+  第二行，而不是把某一项裁掉。
+- **CPU** —— 占用率与温度。完整的型号名与线程数放在该项的 tooltip 里，所以这一行很短
+  但信息没丢。
+- **内存** —— 已用/总量共用同一单位，采用与 Windows 任务管理器、macOS 活动监视器
+  一致的「可用内存」口径。
+- **每一块 GPU** —— 每块适配器一项，显示占用率、温度、显存，可选功耗。双显卡笔记本会
+  同时显示独显与核显。
+- **网速 / NET** —— 下行与上行速率，取自操作系统自身的网络计数器；回环与虚拟适配器
+  已被排除，所以总量不会被重复计算。
+- **跟随你的 DSH 主题** —— 每个颜色都是 DSH 的设计 token，所以内置的明暗切换和
+  Catppuccin 这类第三方主题都能对上，切主题的瞬间就会重新上色。
+- **悬浮可拖动** —— 在状态条上任意位置（按钮除外）都能拖动；位置与不透明度在刷新后
+  保留。
+- **对缺失数据诚实** —— 平台未实现的计数器显示 `—`，绝不会伪造一个 `0`。某个厂商工具
+  缺失只会让一项指标降级，不会让整条状态条变空白。
+- **仅回环、只读** —— 宿主半边只提供两个受本机回环围栏保护的 GET 路由。不写任何
+  东西、不对外联网、不提权、不装驱动。
+- **中英双语** —— 跟随 DSH 的语言设置。
 
-## Requirements
+## 环境要求
 
 | | |
 | --- | --- |
-| DeepSeek Harness | `>= 0.1.5-rc.1`, `web` or `desktop` profile |
-| Node | `>= 20` (the version Harness itself ships is fine) |
-| Runtime dependencies | **none** |
+| DeepSeek Harness | `>= 0.1.5-rc.1`，`web` 或 `desktop` profile |
+| Node | `>= 20`（Harness 自带的版本即可） |
+| 运行时依赖 | **无** |
 
-Platform coverage for each reading:
+各指标的平台覆盖情况：
 
-| Reading | Windows | Linux | macOS |
+| 指标 | Windows | Linux | macOS |
 | --- | --- | --- | --- |
-| CPU utilization | ✅ `os.cpus()` | ✅ | ✅ |
-| CPU temperature | ✅ ACPI thermal zones via `typeperf` | ✅ `/sys/class/thermal` + `coretemp`/`k10temp` | ❌ needs root (`powermetrics`) |
-| Memory | ✅ | ✅ | ✅ |
-| GPU utilization / temp / VRAM / power | ✅ NVIDIA via `nvidia-smi`; utilization-only fallback via Windows GPU performance counters | ✅ NVIDIA via `nvidia-smi`; AMD via `amdgpu` sysfs | ❌ |
-| Network throughput | ✅ PDH network counters via `typeperf` | ✅ `/proc/net/dev` | ❌ |
+| CPU 占用率 | ✅ `os.cpus()` | ✅ | ✅ |
+| CPU 温度 | ✅ 经 `typeperf` 读取 ACPI 热区 | ✅ `/sys/class/thermal` + `coretemp`/`k10temp` | ❌ 需 root（`powermetrics`） |
+| 内存 | ✅ | ✅ | ✅ |
+| GPU 占用/温度/显存/功耗 | ✅ NVIDIA 经 `nvidia-smi`；无 nvidia-smi 时用 Windows GPU 性能计数器（仅占用率） | ✅ NVIDIA 经 `nvidia-smi`；AMD 经 `amdgpu` sysfs | ❌ |
+| 网速 | ✅ 经 `typeperf` 读取 PDH 网络计数器 | ✅ `/proc/net/dev` | ❌ |
 
-Row by row: **CPU usage, memory and network work everywhere the operating system
-publishes counters.** GPU and CPU temperature need a source the operating system
-actually provides; where it does not exist, that one reading is blank and the
-rest keep working.
+逐项说明：**CPU 占用率与内存在任何能跑 Node 的地方都可用。** GPU 与 CPU 温度需要
+操作系统确实公开了数据源；如果平台没有，就只空出那一项，其余照常工作。
 
-## Install
+## 安装
 
-### Straight from this repository (recommended)
+### 直接从本仓库安装（推荐）
 
 ```sh
 dsh plugin --profile web add github:GNX001/dsh-system-monitor
 ```
 
-No build step is needed: the bundled browser half (`lib/client.js`) is committed,
-so installing from git is enough. There is no npm release yet.
+无需构建：浏览器半边的产物 `lib/client.js` 已随仓库提交，所以从 git 安装即可。目前
+还没有 npm 发布。
 
-### From a local checkout
+### 从本地克隆安装
 
 ```sh
 git clone https://github.com/GNX001/dsh-system-monitor.git
@@ -82,113 +75,103 @@ cd dsh-system-monitor
 dsh plugin --profile web add link:$(pwd)
 ```
 
-### From npm (once published)
+### 从 npm 安装（发布之后）
 
 ```sh
 dsh plugin --profile web add dsh-system-monitor
 ```
 
-Restart `dsh web` (or DSH Desktop) after installing. The tile appears in the
-top-right corner, and **Settings → System monitor tile** gains a section for it.
+安装后重启 `dsh web`（或 DSH Desktop）。磁贴会出现在右上角，并在
+**设置 → 系统监视磁贴** 中出现对应的配置分区。
 
-> **DSH Desktop note.** The desktop shell starts the Harness server itself, so a
-> plugin install only takes effect on the next restart of DSH Desktop. If `dsh`
-> is not on your `PATH`, the same command works through the copy the desktop
-> ships — for example
-> `node "$env:APPDATA\dsh-desktop\harness\profiles\node_modules\@deepseek-ai\dsh\lib\bin.js" plugin --profile web add github:GNX001/dsh-system-monitor`.
+> **DSH Desktop 说明。** 桌面版自己拉起 Harness 服务，所以插件安装要等下次重启
+> DSH Desktop 才生效。如果你的 `PATH` 里没有 `dsh`，用桌面版自带的那份也能跑，例如
+> `node "$env:APPDATA\dsh-desktop\harness\profiles\node_modules\@deepseek-ai\dsh\lib\bin.js" plugin --profile web add github:GNX001/dsh-system-monitor`。
 
-## Usage
+## 使用
 
-| Action | How |
+| 操作 | 方式 |
 | --- | --- |
-| Move the capsule | Drag anywhere on it except its buttons |
-| Refresh immediately | The `⟳` button (forces a fresh hardware probe) |
-| Hide the capsule | The `✕` button — reopen it in **Settings → System monitor tile** |
-| Configure | **Settings → System monitor tile** |
+| 移动状态条 | 在状态条上任意位置拖动（按钮除外） |
+| 立即刷新 | 点 `⟳` 按钮（强制重新探测硬件） |
+| 隐藏状态条 | 点 `✕` 按钮；之后在 **设置 → 系统监视磁贴** 里重新打开 |
+| 修改配置 | **设置 → 系统监视磁贴** |
 
-Everything configurable lives in DSH's own Settings, not in a popover on the
-capsule:
+所有可配置项都在 DSH 自己的设置里，磁贴上不弹浮层：
 
-| Setting | Default | Notes |
+| 设置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| Show the floating capsule | on | The way back after hiding it |
-| Refresh interval | 1.5 s | 1 s – 10 s |
-| Opacity | 94 % | 40 % – 100 % |
-| CPU / CPU temperature / Memory / GPU | on | Item visibility |
-| GPU temperature / VRAM / power draw | temp + VRAM on, power off | |
-| Network speed (up and down) | on | Both directions always shown together |
-| Compact mode | off | Tighter padding and type |
-| Reset position / Restore defaults | — | |
+| 显示悬浮状态条 | 开 | 隐藏之后的恢复入口 |
+| 刷新间隔 | 1.5 秒 | 1–10 秒 |
+| 不透明度 | 94% | 40%–100% |
+| CPU / CPU 温度 / 内存 / GPU | 开 | 各项显隐 |
+| GPU 温度 / 显存 / 功耗 | 温度与显存开，功耗关 | |
+| 网速（上行与下行） | 开 | 两个方向总是一起显示 |
+| 紧凑模式 | 关 | 内边距与字号更紧 |
+| 重置位置 / 恢复默认设置 | — | |
 
-## Theming and stacking
+## 主题与层叠
 
-**Colors.** The capsule owns no palette. Every color is a DSH design token
-(`--dsw-alias-bg-layer-2`, `--dsw-alias-label-primary`, `--dsw-alias-state-warn-primary`,
-…), which the theme plugin declares on `body` for the light theme and on
-`body[data-ds-dark-theme]` for the dark one. The capsule is a child of `body`, so
-it inherits those declarations and the browser re-resolves them the moment the
-theme changes — no listener, no re-render, and third-party themes such as
-Catppuccin and neu-theme are followed because they rewrite the same tokens. Each
-reference carries a literal fallback, so it still renders where the tokens are
-absent.
+**配色。** 磁贴没有自己的调色板。每个颜色都是 DSH 的设计 token
+（`--dsw-alias-bg-layer-2`、`--dsw-alias-label-primary`、`--dsw-alias-state-warn-primary`
+等），由主题插件声明在 `body`（浅色）与 `body[data-ds-dark-theme]`（深色）上。磁贴是
+`body` 的子节点，因此直接继承这些声明，切主题时由浏览器重新解析——没有监听器、也不
+需要重渲染；Catppuccin、neu-theme 这类第三方主题之所以也能对上，是因为它们改写的
+就是同一批 token。每个引用都带字面量兜底，所以在 token 缺失的环境里依然能正常显示。
 
-**Stacking.** The capsule is fixed at `z-index: 900`. That has to sit between two
-layers: conversation content (code blocks and tool cards use `z-index: 1`–`12`,
-and because none of their ancestors creates a stacking context they paint over a
-`z-index: auto` fixed element) and DSH's own menus and modals (`1000`+). So the
-capsule covers a code block, and opening a menu still covers the capsule.
+**层叠。** 磁贴固定为 `z-index: 900`，必须夹在两层之间：会话内容（代码块与工具卡用
+`z-index: 1`–`12`，而它们的祖先都没有创建层叠上下文，所以会盖住 `z-index: auto` 的
+固定定位元素）以及 DSH 自己的菜单与弹窗（`1000` 以上）。于是磁贴能盖住代码块，而
+打开菜单时菜单仍会盖住磁贴。
 
-## Configuration
+## 配置
 
-The tile's own options live in the browser. The **host half** is configured in
-the profile's `cordis.patch.yml`, under the row this plugin inserts:
+磁贴自身的选项存在浏览器里。**宿主半边**在 profile 的 `cordis.patch.yml` 中配置，
+就在本插件插入的那一行下面：
 
 ```yaml
 - insert:
     - id: system-monitor
       name: dsh-system-monitor
       config:
-        # All optional; these are the defaults.
-        tickMs: 1000                  # CPU/memory cadence (in-process, cheap)
-        gpuMs: 1500                   # GPU probe cadence (spawns nvidia-smi)
-        cpuTemperatureMs: 5000        # CPU temperature cadence (spawns typeperf)
-        networkMs: 3000               # network throughput cadence (spawns typeperf)
+        # 全部可选，下列为默认值。
+        tickMs: 1000                  # CPU/内存采样间隔（进程内计算，开销极低）
+        gpuMs: 1500                   # GPU 探测间隔（会启动 nvidia-smi）
+        cpuTemperatureMs: 5000        # CPU 温度探测间隔（会启动 typeperf）
+        networkMs: 3000               # 网速探测间隔（会启动 typeperf）
         cpuTemperatureScale: auto     # auto | kelvin | decikelvin | decicelsius
-        gpu: true                     # false = never probe GPUs
-        cpuTemperature: true          # false = never probe CPU temperature
-        network: true                 # false = never probe network throughput
-        networkExclude: []            # adapter name fragments to ignore (see below)
-        networkInclude: []            # fragments to count even if excluded
-        allowRefresh: true            # false = reject ?refresh=1
-        nvidiaSmiPath: nvidia-smi     # name or absolute path
-        enabled: true                 # false = mount nothing at all
+        gpu: true                     # false = 完全不探测 GPU
+        cpuTemperature: true          # false = 完全不探测 CPU 温度
+        network: true                 # false = 完全不探测网速
+        networkExclude: []            # 要忽略的适配器名片段（见下）
+        networkInclude: []            # 即使被排除也强制计入的片段
+        allowRefresh: true            # false = 拒绝 ?refresh=1
+        nvidiaSmiPath: nvidia-smi     # 可填命令名或绝对路径
+        enabled: true                 # false = 什么都不挂载
 ```
 
-`networkExclude` defaults to a list of loopback, VPN/overlay and virtual adapter
-fragments (`loopback`, `pseudo`, `virtual`, `isatap`, `teredo`, `vmware`, `wsl`,
-`wireguard`, `tailscale`, `docker`, and so on), plus any Windows duplicate
-instance suffixed `_2`. That matters: a loopback or VPN adapter carries the *same*
-packets as the physical one, so counting both doubles the reading — and a local
-dev server alone can produce gigabytes of loopback traffic. The snapshot lists
-every adapter with a `counted` flag, so you can see exactly what was included
-before overriding anything.
+`networkExclude` 默认是一组回环、VPN/覆盖网络与虚拟适配器的名片段（`loopback`、
+`pseudo`、`virtual`、`isatap`、`teredo`、`vmware`、`wsl`、`wireguard`、
+`tailscale`、`docker` 等），外加 Windows 上重名的 `_2` 副本实例。这一点很关键：回环或
+VPN 适配器承载的是与物理网卡**同一批**数据包，两边都算就会翻倍——而光是一个本地开发
+服务器就能造出几个 GB 的回环流量。快照里会列出每个适配器及其 `counted` 标记，所以你
+可以在覆盖之前先看清到底算了哪些。
 
-`cpuTemperatureScale` exists because ACPI thermal zones are reported in
-different units by different providers; `auto` detects the unit from the
-magnitude, and the override is there for sources that disagree. See
-[How each number is obtained](#how-each-number-is-obtained).
+`cpuTemperatureScale` 之所以存在，是因为不同 provider 上报 ACPI 热区时的单位并不
+一致；`auto` 会按数值量级判断单位，量级不符时可用它手动覆盖。详见
+[各项数值是怎么来的](#各项数值是怎么来的)。
 
-## HTTP API
+## HTTP 接口
 
-Both routes are `GET`, loopback-only, and `Cache-Control: no-store`.
+两个路由都是 `GET`、仅回环、且带 `Cache-Control: no-store`。
 
-| Route | Purpose |
+| 路由 | 用途 |
 | --- | --- |
-| `/api/dsh-system-monitor/snapshot` | The current reading (served from a cached sample; no IO in the request path) |
-| `/api/dsh-system-monitor/snapshot?refresh=1` | Force a fresh hardware probe before answering |
-| `/api/dsh-system-monitor/health` | Plugin identity, version, cadence — never touches hardware |
+| `/api/dsh-system-monitor/snapshot` | 当前读数（读缓存快照，请求路径内不做 IO） |
+| `/api/dsh-system-monitor/snapshot?refresh=1` | 先强制重新探测硬件再返回 |
+| `/api/dsh-system-monitor/health` | 插件身份、版本、采样节奏——不碰硬件 |
 
-`snapshot` returns:
+`snapshot` 返回：
 
 ```jsonc
 {
@@ -197,12 +180,12 @@ Both routes are `GET`, loopback-only, and `Cache-Control: no-store`.
   "ts": 1780000000000,
   "host": { "hostname": "dev-box", "platform": "win32", "arch": "x64", "uptimeSec": 3600, "pid": 42 },
   "cpu": {
-    "usage": 23.4,                 // percent, null until a second sample exists
+    "usage": 23.4,                 // 百分比；在拿到第二次采样前为 null
     "perCore": [10, 90, 50, 0],
     "cores": 4,
     "model": "AMD Ryzen 7 8845HS w/ Radeon 780M Graphics",
     "speedMHz": 3800,
-    "temperature": 81.9,           // Celsius, null when unavailable
+    "temperature": 81.9,           // 摄氏度；不可用时为 null
     "temperatureSource": "acpi-thermal-zone",
     "temperatureZones": [{ "name": "\\_SB.ECTZ", "celsius": 81.9 }]
   },
@@ -218,196 +201,165 @@ Both routes are `GET`, loopback-only, and `Cache-Control: no-store`.
     "memory": { "usedBytes": 4294967296, "totalBytes": 12884901888, "usage": 33.3 }
   }],
   "gpuSource": "nvidia-smi",
-  "errors": []                     // per-metric diagnostics, capped at 6
+  "errors": []                     // 逐项诊断，最多 6 条
 }
 ```
 
-Every numeric field is `null` rather than `0` when the reading is unavailable.
+任何数值在读数不可用时都是 `null` 而不是 `0`。
 
-## Privacy and security
+## 隐私与安全
 
-- **Loopback only.** Every request must arrive from a direct `127.0.0.1` / `::1`
-  peer; anything else is `403` before a single metric is read. A request carrying
-  a proxy's `X-Forwarded-For` / `Forwarded` header is refused too, so a
-  reverse-proxied LAN client cannot reach the plugin by pretending to be local.
-- **Read-only.** There are no mutation routes. Nothing this plugin exposes can
-  change a file, a setting, or a process — so there is no CSRF surface to defend.
-- **No network egress.** The plugin makes no outbound requests and sends no
-  telemetry. It never contacts a vendor API or the internet.
-- **No elevation.** Nothing runs as administrator/root, no driver is installed,
-  no system service is registered.
-- **Nothing leaves the machine.** Readings are served to the browser you are
-  already looking at and are never written to disk.
+- **仅回环。** 每个请求都必须来自直连的 `127.0.0.1` / `::1` 对端；否则在读取任何
+  指标之前就返回 `403`。带 `X-Forwarded-For` / `Forwarded` 头的请求同样被拒绝，
+  所以反向代理后面的局域网客户端无法伪装成本机来访问。
+- **只读。** 没有任何写路由。这个插件暴露的接口无法改动文件、设置或进程——因此也
+  不存在需要防御的 CSRF 面。
+- **不对外联网。** 插件不发起任何外发请求，也不上报任何遥测；不联系厂商 API，也不
+  访问互联网。
+- **不提权。** 不以管理员/root 运行，不安装驱动，不注册系统服务。
+- **数据不出本机。** 读数只发给你正在看的那个浏览器，不写入磁盘。
 
-The snapshot does reveal host inventory (CPU/GPU model names, memory pressure) to
-whatever can reach the loopback port. That is inherent to a system monitor; the
-fence is what keeps it local.
+快照确实会暴露主机资产信息（CPU/GPU 型号名、内存压力）给任何能访问到回环端口的
+东西——这对一个系统监视器来说是无法避免的，而围栏保证它只留在本机。
 
-## How each number is obtained
+## 各项数值是怎么来的
 
-This plugin installs no drivers and reads no undocumented memory. Every reading
-comes from one of three places, and each is labelled with its `source` field.
+本插件不安装驱动，也不读任何未公开的内存。每个读数都来自下面三类来源之一，并且都
+带 `source` 字段标明出处。
 
-**CPU utilization** — `os.cpus()` cumulative per-core jiffies, differenced
-between ticks. The first sample after start has no baseline, so `usage` is `null`
-until the second.
+**CPU 占用率** —— `os.cpus()` 的逐核心累计 jiffies，按 tick 差分。启动后的第一次采样
+没有基线，所以在第二次采样前 `usage` 为 `null`。
 
-**Memory** — `os.totalmem()` / `os.freemem()`. On Windows this is
-`GlobalMemoryStatusEx.ullAvailPhys` (the "available" figure), which is why the
-percentage matches Task Manager rather than a raw free-page count.
+**内存** —— `os.totalmem()` / `os.freemem()`。在 Windows 上这对应
+`GlobalMemoryStatusEx.ullAvailPhys`（即「可用」值），所以百分比与任务管理器一致，
+而不是一个原始的空闲页计数。
 
-**CPU temperature, Windows** — the PDH counter set
-`\Thermal Zone Information(*)\Temperature`, read with the built-in `typeperf`
-tool. Windows exposes no CPU die temperature to a non-elevated process
-(`MSAcpi_ThermalZoneTemperature` and the vendor WMI namespaces are refused or
-absent without drivers), so the ACPI thermal zones are what is available.
+**CPU 温度（Windows）** —— PDH 计数器集
+`\Thermal Zone Information(*)\Temperature`，用系统自带的 `typeperf` 读取。Windows
+不会把 CPU 核心温度暴露给非提权进程（`MSAcpi_ThermalZoneTemperature` 和厂商 WMI
+命名空间在没有驱动的情况下要么被拒绝、要么根本不存在），所以能拿到的就是 ACPI 热区。
 
-> **On the unit.** The PDH counter is widely documented as "degrees Kelvin", but
-> ACPI's underlying `_TMP` is deci-Kelvin — and deci-Kelvin is impossible for the
-> values a real machine reports (355 deci-Kelvin is 35.5 K). Measured on a
-> Windows 11 AMD laptop: the counter idles at ~355 and plateaus at ~367 under
-> sustained 4-thread load. Read as Kelvin that is 82 °C → 94 °C, i.e. a laptop
-> CPU settling just under its 95 °C throttle. Read as deci-Celsius the same trace
-> would be a 1.2 °C rise under full load, which no physical package does. This
-> plugin therefore reads Kelvin, and `cpuTemperatureScale` lets you override it
-> for a source that behaves differently.
+> **关于单位。** PDH 计数器在文档里普遍被写作「开尔文」，但 ACPI 底层的 `_TMP` 是
+> 分度开尔文（deci-Kelvin）——而分度开尔文对真实机器上报的数值来说是不可能的
+> （355 分度开尔文 = 35.5 K）。在一台 Windows 11 AMD 笔记本上实测：该计数器空闲时约
+> 为 355，4 线程持续满载后稳定在约 367。按开尔文读，就是 82 °C → 94 °C，正是一颗
+> 笔记本 CPU 恰好卡在 95 °C 温控阈值下方；按分度摄氏度读，同一段曲线就变成满载下只
+> 上升 1.2 °C，而任何物理封装都不会这样。因此本插件按开尔文读取，并提供
+> `cpuTemperatureScale` 让你在遇到行为不同的数据源时手动覆盖。
 
-**CPU temperature, Linux** — `/sys/class/thermal/thermal_zone*/temp` and the
-`hwmon` chips whose driver name is a CPU sensor (`coretemp`, `k10temp`,
-`zenpower`, `cpu_thermal`, `acpitz`). The hottest zone is reported as the
-headline figure and every zone is listed in `temperatureZones`.
+**CPU 温度（Linux）** —— `/sys/class/thermal/thermal_zone*/temp`，以及驱动名属于 CPU
+传感器的 `hwmon` 芯片（`coretemp`、`k10temp`、`zenpower`、`cpu_thermal`、`acpitz`）。
+最热的那个区作为主数值，全部热区列在 `temperatureZones` 中。
 
-**GPU, NVIDIA (Windows and Linux)** — `nvidia-smi
+**GPU（NVIDIA，Windows 与 Linux）** —— `nvidia-smi
 --query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,name
---format=csv,noheader,nounits`, invoked with a fixed argument vector. `name` is
-requested **last** on purpose: GPU marketing names contain commas, and a trailing
-free-text column can be re-joined safely whereas a middle one cannot.
+--format=csv,noheader,nounits`，参数向量固定。`name` 是**故意放在最后**的：GPU 型号名
+里带逗号，末尾的自由文本列可以安全地重新拼接，夹在中间则不行。
 
-**GPU, Windows without `nvidia-smi`** — the vendor-neutral PDH counters
-`\GPU Engine(*)\Utilization Percentage` and `\GPU Adapter Memory(*)\Dedicated
-Usage`, grouped per adapter. Utilization is the **maximum** across an adapter's
-engine instances, not the sum: the counters are per-engine percentages, so
-summing a frame that is both rendered and copied would exceed 100%. This counter
-set carries no temperature and no VRAM capacity, so those stay `null`.
+**GPU（Windows，无 `nvidia-smi` 时）** —— 厂商中立的 PDH 计数器
+`\GPU Engine(*)\Utilization Percentage` 与 `\GPU Adapter Memory(*)\Dedicated
+Usage`，按适配器分组。占用率取适配器各 engine 实例的**最大值**而非求和：这些计数器
+是逐 engine 的百分比，把同一帧的渲染与拷贝相加会超过 100%。该计数器集不含温度，也
+不含显存容量，所以这两项保持 `null`。
 
-**GPU, AMD on Linux** — `amdgpu` sysfs: `gpu_busy_percent`, `mem_info_vram_used`
-/ `mem_info_vram_total`, and the `hwmon` temperature nodes. No process needed.
+**GPU（Linux，AMD）** —— `amdgpu` sysfs：`gpu_busy_percent`、
+`mem_info_vram_used` / `mem_info_vram_total`，以及 `hwmon` 温度节点，无需启动进程。
 
-**Network throughput, Windows** — the PDH counters
-`\Network Interface(*)\Bytes Received/sec` and `\Bytes Sent/sec`, read with the
-same `typeperf` call pattern as the thermal zones. Those counters are already
-*rates*, so no differencing is needed; the columns are counter-major (every
-`Received` instance, then every `Sent` one), so the direction is read from each
-header path rather than assumed from the column position. Only adapters passing
-the exclusion filter are summed.
+**网速（Windows）** —— PDH 计数器 `\Network Interface(*)\Bytes Received/sec` 与
+`\Bytes Sent/sec`，与热区用同一套 `typeperf` 调用方式。这些计数器本身就是**速率**，所以
+不需要差分；列序是「按计数器分组」的（先所有 `Received` 实例，再所有 `Sent` 实例），
+因此方向是从每个表头路径读出来的，而不是按列位置猜的。只有通过排除过滤的适配器会被
+计入。
 
-**Network throughput, Linux** — `/proc/net/dev`, which carries *cumulative* byte
-counts. This is the one reading that is differenced rather than used directly, so
-the first sample after start has no interval to measure and reports `—`, exactly
-like CPU utilization.
+**网速（Linux）** —— `/proc/net/dev`，里面是**累计**字节数。这是唯一一项需要差分而不是
+直接使用的读数，所以启动后的第一次采样没有可比区间，显示 `—`，与 CPU 占用率一致。
 
-**Throughput is never a temperature-style alarm** — it has no meaningful
-threshold, so the value never turns amber or red.
+**网速不做温度式的告警** —— 它没有有意义的阈值，所以数值永远不会变黄或变红。
 
-**Zero is treated as "no reading"** for every temperature path: ACPI reports `0`
-for an absent sensor and kernel drivers publish `0` for an unpopulated one.
-Reporting that as a genuine 0 °C would be worse than reporting nothing.
+**所有温度路径都把 0 视为「没有读数」**：ACPI 对不存在的传感器上报 `0`，内核驱动对
+未接的传感器也发布 `0`。把它当成真实的 0 °C 上报，比什么都不报更糟。
 
-## Troubleshooting
+## 疑难排查
 
-**The tile never appears.**
-The browser half needs the host half. Check `GET /api/dsh-system-monitor/health`
-in the same browser: a JSON reply means the host half is up and the problem is
-client-side (reload the app). A 404 means the plugin did not load — confirm the
-row is in the profile's `cordis.patch.yml` and restart `dsh web`.
+**状态条一直不出现。**
+浏览器半边需要宿主半边。用同一个浏览器打开 `GET /api/dsh-system-monitor/health`：返回
+JSON 说明宿主半边已就位、问题在客户端（刷新页面）；返回 404 说明插件没加载——确认
+profile 的 `cordis.patch.yml` 里有那一行，然后重启 `dsh web`。
 
-**GPU shows `No GPU detected`.**
-Nothing answered. Verify `nvidia-smi` is on `PATH`
-(`nvidia-smi --query-gpu=name --format=csv,noheader`); if it lives elsewhere, set
-`nvidiaSmiPath` to the absolute path. On Windows the vendor-neutral fallback
-still reports utilization for AMD/Intel adapters, but without temperature or a
-VRAM total — that data is simply not published by the platform.
+**GPU 显示「未检测到 GPU」。**
+没有任何数据源应答。确认 `nvidia-smi` 在 `PATH` 上
+（`nvidia-smi --query-gpu=name --format=csv,noheader`）；如果它在别处，把
+`nvidiaSmiPath` 设为绝对路径。在 Windows 上厂商中立的兜底路径仍能给出 AMD/Intel
+适配器的占用率，但没有温度和显存总量——那些数据平台根本没公开。
 
-**CPU temperature shows `—`.**
-On Windows the ACPI thermal-zone counter is absent on some virtual machines and
-some older firmware. On Linux no CPU `hwmon` chip was found. On macOS there is
-no non-root source at all. Check the `errors` array in the snapshot for the
-specific reason.
+**CPU 温度显示 `—`。**
+Windows 上某些虚拟机和较老的固件没有 ACPI 热区计数器；Linux 上没找到 CPU `hwmon`
+芯片；macOS 上则完全没有非 root 的数据源。具体原因看快照里的 `errors` 数组。
 
-**The temperature looks wrong by a fixed factor.**
-Set `cpuTemperatureScale` — see the unit discussion above.
+**温度数值差了一个固定倍数。**
+设置 `cpuTemperatureScale`——见上面的单位讨论。
 
-**网速 / NET shows `—` or stays at 0 B/s.**
-`0 B/s` means the counters were read and the machine is simply idle, which is
-correct. `—` means nothing could be measured: macOS has no non-root source
-(unsupported), or on Linux the first sample had no interval yet — the next poll
-resolves it. To see what was counted, read `network.interfaces` in the snapshot:
-each entry carries a `counted` flag. If your traffic runs over an adapter the
-default filter drops (a VPN, or a virtual switch), add a fragment to
-`networkInclude`.
+**网速显示 `—` 或一直是 0 B/s。**
+`0 B/s` 表示计数器读到了、机器确实空闲，这是正确结果。`—` 表示量不到：macOS 没有非 root
+的数据源（不支持），或者 Linux 上第一次采样还没有区间——下一次轮询就会补上。想看看到底
+算了哪些适配器，读快照里的 `network.interfaces`，每项都带 `counted` 标记。如果你的流量
+走的是被默认过滤规则排除的适配器（VPN，或虚拟交换机），把对应片段加到 `networkInclude`。
 
-**The capsule responds slowly, or a machine feels busier.**
-Each of `gpuMs`, `cpuTemperatureMs` and `networkMs` controls one short-lived
-helper process. Raise the cadence, or set `gpu: false` / `cpuTemperature: false`
-/ `network: false` to switch a probe off entirely. CPU, memory and the CPU rate
-counters cost nothing measurable.
+**状态条响应变慢，或感觉机器更忙了。**
+`gpuMs`、`cpuTemperatureMs`、`networkMs` 各自控制一个短命辅助进程。调大间隔，或把
+`gpu: false` / `cpuTemperature: false` / `network: false` 关掉对应探测。CPU、内存与 CPU
+速率计数器则几乎没有可测量的开销。
 
-## Development
+## 开发
 
 ```sh
-npm install --ignore-scripts   # --ignore-scripts avoids esbuild's postinstall probe
-npm run build                  # bundles src/client/** into lib/client.js
+npm install --ignore-scripts   # --ignore-scripts 跳过 esbuild 的 postinstall 探测
+npm run build                  # 把 src/client/** 打包成 lib/client.js
 npm test                       # node --test test/
-npm run verify                 # build, then test
-npm run test:inline            # the same suites in one process
-npm run dev                    # host half on :43199 + a page that boots the real tile
+npm run verify                 # 先构建，再测试
+npm run test:inline            # 同样的套件，全部跑在单个进程里
+npm run dev                    # 在 :43199 挂上宿主半边，并提供一个能跑真磁贴的页面
 ```
 
-`npm test` needs the test runner to spawn a child process per file. Sandboxes and
-restricted environments can refuse that; `npm run test:inline` imports the same
-suites into a single process instead.
+`npm test` 需要测试运行器为每个文件派生一个子进程。沙箱和受限环境可能拒绝这种派生；
+`npm run test:inline` 则把同一批套件导入单个进程来跑。
 
-`npm run dev` mounts the real host half on `http://127.0.0.1:43199/` and serves a
-page that boots the real `lib/client.js` with the same `__ModuleLoader__`
-contract the shell uses — so the tile can be exercised against actual hardware
-without installing into a DSH profile and restarting the app. The page inlines
-the shell's **own** `:root` / `body` / `body[data-ds-dark-theme]` rule blocks
-(extracted from `@deepseek-ai/dsh-client-ui-theme`, overridable with
-`DSM_THEME_CLIENT`) and offers a theme toggle, so the token-following behaviour
-can be checked for real rather than taken on trust. It also prints the tile's
-rows as text on startup, which is the quickest way to read the layout without a
-browser. It is a development tool and is not part of the published package.
+`npm run dev` 会把真实的宿主半边挂在 `http://127.0.0.1:43199/`，并提供一个用同样
+`__ModuleLoader__` 契约加载真实 `lib/client.js` 的页面——这样无需装进 DSH profile、也
+无需重启应用，就能对着真实硬件试磁贴。该页面会内联外壳**自己**的 `:root` / `body` /
+`body[data-ds-dark-theme]` 规则块（从 `@deepseek-ai/dsh-client-ui-theme` 抽取，可用
+`DSM_THEME_CLIENT` 覆盖），并提供一个主题切换按钮，所以「跟随主题」这件事是可以当场
+验证的，而不必只凭信任。它还会在启动时把磁贴各行以文字打印出来，这是不用浏览器就能
+最快看清排版的方式。它是开发工具，不属于发布包。
 
-The host half (`lib/index.js` and `lib/metrics/**`) is plain ESM and needs no
-build. Only the browser half is bundled, because the DSH client module system
-wants a single classic script that calls
-`window.__ModuleLoader__.load({ id, factory })`; the build wraps esbuild's `cjs`
-output in exactly that factory and keeps `react` / `react-dom/client` external to
-the shell's module table.
+宿主半边（`lib/index.js` 与 `lib/metrics/**`）是纯 ESM，无需构建。只有浏览器半边需要
+打包，因为 DSH 的客户端模块系统要求一个调用
+`window.__ModuleLoader__.load({ id, factory })` 的经典脚本；构建脚本把 esbuild 的 `cjs`
+产物正好包进这个 factory，并把 `react` / `react-dom/client` 保持为外壳模块表里的外部
+依赖。
 
-### Layout
+### 目录结构
 
-| Path | What it is |
+| 路径 | 说明 |
 | --- | --- |
-| `lib/index.js` | Host half — the cordis plugin entry |
-| `lib/routes.js`, `lib/http.js`, `lib/trust.js` | Routes, JSON writer, loopback fence |
-| `lib/metrics/` | Collectors: `parse`, `exec`, `cpu`, `memory`, `cputemp`, `gpu`, `monitor` |
-| `src/client/` | Browser half sources: `model` (pure logic), `tile`, `settings`, `styles`, `locales` |
-| `lib/client.js` | **Built** browser half (committed so a `link:` install needs no build) |
-| `test/` | `node:test` suites, including a jsdom run of the built bundle |
-| `tools/` | Development only: `dev-server.mjs`, `run-tests.mjs` |
+| `lib/index.js` | 宿主半边 —— cordis 插件入口 |
+| `lib/routes.js`、`lib/http.js`、`lib/trust.js` | 路由、JSON 输出、回环围栏 |
+| `lib/metrics/` | 采集器：`parse`、`exec`、`cpu`、`memory`、`cputemp`、`gpu`、`monitor` |
+| `src/client/` | 浏览器半边源码：`model`（纯逻辑）、`tile`、`settings`、`styles`、`locales` |
+| `lib/client.js` | **构建产物**（浏览器半边；一并提交，`link:` 安装就无需构建） |
+| `test/` | `node:test` 套件，含一个在 jsdom 里跑构建产物的测试 |
+| `tools/` | 仅开发用：`dev-server.mjs`、`run-tests.mjs` |
 
-### Testing notes
+### 测试说明
 
-`test/client-bundle.test.mjs` loads the **built** `lib/client.js` in jsdom
-through the real `__ModuleLoader__` contract, with a `require` shim that only
-answers the modules the shell actually provides — so a bad external (or a stale
-bundle) fails the suite rather than the app. `test/fixtures/` holds real
-`typeperf` and `nvidia-smi` output captured from a hybrid-GPU Windows laptop, so
-the parsers are tested against what the tools actually print, not idealized input.
+`test/client-bundle.test.mjs` 会在 jsdom 中按真实的 `__ModuleLoader__` 契约加载
+**构建产物** `lib/client.js`，且 `require` 桩只应答外壳确实提供的模块——因此错误的外部
+依赖（或过期的构建产物）会在测试里失败，而不是在你的应用里失败。`test/fixtures/` 保存
+了从一台双显卡 Windows 笔记本上实测抓取的 `typeperf` 与 `nvidia-smi` 输出，所以解析器
+是对着工具真正打印的内容测试的，而不是理想化输入。
 
-Run `npm run build` before `npm test` after touching anything under `src/client/`.
+改动 `src/client/` 下任何内容后，跑 `npm test` 之前先跑 `npm run build`。
 
-## License
+## 许可证
 
-MIT — see [LICENSE](LICENSE).
+MIT —— 见 [LICENSE](LICENSE)。

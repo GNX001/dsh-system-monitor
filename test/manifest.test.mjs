@@ -30,7 +30,10 @@ test('the published file list actually contains what the plugin loads', () => {
   for (const entry of ['lib', 'cordis.patch.yml', 'README.md', 'LICENSE']) {
     assert.ok(manifest.files.includes(entry), `${entry} must ship`)
   }
-  assert.ok(manifest.files.includes('README.zh.md'))
+  // The English README ships alongside the Chinese one, which is the primary
+  // file GitHub renders.
+  assert.ok(manifest.files.includes('README.en.md'))
+  assert.ok(!manifest.files.includes('README.zh.md'), 'the pre-rename name must be gone')
 })
 
 test('both manifest exports point at files that exist', async () => {
@@ -80,10 +83,34 @@ test('the browser half carries no host-only imports', async () => {
   }
 })
 
-test('the shipped README documents install, routes and privacy', async () => {
-  const readme = await read('README.md')
-  assert.match(readme, /dsh plugin --profile web add/)
-  assert.match(readme, /\/api\/dsh-system-monitor\/snapshot/)
-  assert.match(readme, /loopback/i)
-  assert.match(readme, /nvidia-smi/)
+test('the Chinese README is the primary one and cross-links the English one', async () => {
+  const zh = await read('README.md')
+  const en = await read('README.en.md')
+
+  // GitHub renders README.md, so it must be the Chinese document and must link
+  // to the English translation — and the English one must link back.
+  assert.match(zh, /中文 \| \[English\]\(README\.en\.md\)/, 'the switcher must point at README.en.md')
+  assert.match(en, /\[中文\]\(README\.md\) \| English/, 'the switcher must point back at README.md')
+  assert.doesNotMatch(zh, /README\.zh\.md/, 'no link may keep the pre-rename name')
+
+  // Both must actually be in their own language.
+  assert.match(zh, /悬浮状态条/)
+  assert.match(en, /floating status capsule/)
+})
+
+test('both READMEs document install, routes, privacy and the platforms', async () => {
+  const zh = await read('README.md')
+  const en = await read('README.en.md')
+
+  for (const [name, text] of [['README.md', zh], ['README.en.md', en]]) {
+    assert.match(text, /dsh plugin --profile web add/, `${name}: install command`)
+    assert.match(text, /\/api\/dsh-system-monitor\/snapshot/, `${name}: snapshot route`)
+    assert.match(text, /nvidia-smi/, `${name}: the GPU tool`)
+    assert.match(text, /--dsw-alias-/, `${name}: the theme tokens it uses`)
+  }
+  // "loopback" is spelled 回环 in the Chinese document.
+  assert.match(zh, /回环/)
+  assert.match(en, /loopback/i)
+  assert.match(zh, /网速/)
+  assert.match(en, /network throughput/i)
 })
