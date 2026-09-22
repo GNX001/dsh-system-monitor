@@ -6,8 +6,11 @@ node_modules/
 
 # Build/QA scratch
 *.log
-_bundle-out.txt
-_bundle-err.txt
+
+# Commit-message and ad-hoc scratch files. `git add -A` before composing a commit
+# message can otherwise pick these up, which is exactly how `_msg.txt` once
+# reached the published tree.
+_*
 
 # OS noise
 .DS_Store

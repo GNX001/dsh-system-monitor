@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { buildViewModel, clampTilePosition, defaultTilePosition } from './model.js'
+import { GRIP_GLYPH, ITEM_SEPARATOR } from './styles.js'
 
 /** Subscribe a component to the shared options store. */
 export function useOptions(store) {
@@ -7,12 +8,12 @@ export function useOptions(store) {
 }
 
 /**
- * The floating tile.
+ * The floating status capsule.
  *
  * Rendered into a body-attached container rather than a slot: the DSH web shell
- * renders exactly one slot (`root`, owned by the three-column AppFrame), so
- * there is no overlay seat to register into, and a `position: fixed` element is
- * what "floating tile" actually means here.
+ * renders exactly one slot (`root`, owned by the three-column AppFrame), so there
+ * is no overlay seat to register into, and a `position: fixed` element is what
+ * "floating" means here.
  *
  * @param props.store - the shared options store.
  * @param props.t - locale-bound translator.
@@ -26,7 +27,7 @@ export function Tile({ store, t, client }) {
   const [status, setStatus] = useState('loading')
   const [request, setRequest] = useState({ id: 0, force: false })
   const [viewport, setViewport] = useState(() => readViewport())
-  const [measured, setMeasured] = useState({ width: 300, height: 120 })
+  const [measured, setMeasured] = useState({ width: 620, height: 30 })
   const [dragPosition, setDragPosition] = useState(null)
   const [dragging, setDragging] = useState(false)
 
@@ -49,7 +50,7 @@ export function Tile({ store, t, client }) {
         setStatus('ready')
       } catch {
         if (cancelled) return
-        // Keep the last good snapshot on screen; the badge shows the outage.
+        // Keep the last good reading on screen; the status dot shows the outage.
         setStatus('error')
       }
     }
@@ -82,7 +83,7 @@ export function Tile({ store, t, client }) {
     return () => globalThis.removeEventListener?.('resize', onResize)
   }, [])
 
-  // Measure after every layout that can change the tile's height.
+  // Measure after every layout that can change the capsule's size.
   const viewModel = useMemo(() => buildViewModel(snapshot, options), [snapshot, options])
   useLayoutEffect(() => {
     const node = tileRef.current
@@ -94,12 +95,15 @@ export function Tile({ store, t, client }) {
         ? previous
         : { width: rect.width, height: rect.height }
     )
-  }, [viewModel.rows.length, options.collapsed, options.compact, status])
+  }, [viewModel.rows.length, options.compact, status])
 
   // --- dragging --------------------------------------------------------------
 
+  // The whole capsule is the drag handle (it has no title bar), so a press that
+  // lands on a button has to be excluded explicitly.
   const onPointerDown = useCallback((event) => {
     if (event.button !== 0) return
+    if (event.target?.closest?.('button') != null) return
     const node = tileRef.current
     if (node === null) return
     const rect = node.getBoundingClientRect()
@@ -140,10 +144,6 @@ export function Tile({ store, t, client }) {
     setDragPosition(null)
   }, [store])
 
-  const onDoubleClick = useCallback(() => {
-    store.set({ collapsed: !options.collapsed })
-  }, [options.collapsed, store])
-
   // --- derived render state --------------------------------------------------
 
   const position = useMemo(() => {
@@ -154,9 +154,11 @@ export function Tile({ store, t, client }) {
 
   if (options.enabled !== true) return null
 
-  const updatedText =
-    viewModel.updatedAt === null ? t('never') : t('updatedAt', { time: formatClock(viewModel.updatedAt) })
-  const statusText = status === 'error' ? t('offline') : (viewModel.host?.hostname ?? t('title'))
+  const rowNodes = []
+  viewModel.rows.forEach((row, index) => {
+    if (index > 0) rowNodes.push(<span className="dsm-sep" key={`sep-${row.key}`} aria-hidden="true">{ITEM_SEPARATOR}</span>)
+    rowNodes.push(<Item key={row.key} row={row} t={t} />)
+  })
 
   return (
     <section
@@ -166,28 +168,33 @@ export function Tile({ store, t, client }) {
       data-dragging={dragging ? '1' : undefined}
       style={{ left: `${position.x}px`, top: `${position.y}px`, opacity: options.opacity }}
       aria-label={t('title')}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
     >
-      <header
-        className="dsm-head"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onDoubleClick={onDoubleClick}
-      >
-        <span className="dsm-grip" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span className="dsm-title">{t('title')}</span>
+      <span className="dsm-grip" aria-hidden="true">{GRIP_GLYPH}</span>
+
+      <div className="dsm-items">
+        {rowNodes}
+        {viewModel.rows.length === 0 ? (
+          <span className={status === 'error' ? 'dsm-note dsm-err' : 'dsm-note'}>
+            {status === 'error' ? t('offline') : t('loading')}
+          </span>
+        ) : null}
+      </div>
+
+      {status !== 'ready' ? (
+        <span className="dsm-status" data-status={status} title={status === 'error' ? t('offline') : t('loading')} />
+      ) : null}
+
+      <span className="dsm-actions">
         <button
           type="button"
           className="dsm-btn"
           data-spin={status === 'loading' ? '1' : '0'}
           title={t('refresh')}
           aria-label={t('refresh')}
-          onPointerDown={stopPointer}
           onClick={() => setRequest((previous) => ({ id: previous.id + 1, force: true }))}
         >
           <RefreshIcon />
@@ -195,84 +202,40 @@ export function Tile({ store, t, client }) {
         <button
           type="button"
           className="dsm-btn"
-          title={options.collapsed ? t('expand') : t('collapse')}
-          aria-label={options.collapsed ? t('expand') : t('collapse')}
-          aria-expanded={options.collapsed !== true}
-          onPointerDown={stopPointer}
-          onClick={() => store.set({ collapsed: !options.collapsed })}
-        >
-          <ChevronIcon collapsed={options.collapsed === true} />
-        </button>
-        <button
-          type="button"
-          className="dsm-btn"
           title={t('hide')}
           aria-label={t('hide')}
-          onPointerDown={stopPointer}
           onClick={() => store.set({ enabled: false })}
         >
           <CloseIcon />
         </button>
-      </header>
-
-      {options.collapsed === true ? null : (
-        <div className="dsm-body">
-          {viewModel.ok !== true && status === 'loading' ? <p className="dsm-note">{t('loading')}</p> : null}
-          {viewModel.ok !== true && status === 'error' ? <p className="dsm-note dsm-err">{t('hostUnavailable')}</p> : null}
-
-          {viewModel.rows.map((row) => (
-            <Row key={row.key} row={row} />
-          ))}
-
-          {viewModel.ok === true && options.showGpu === true && (snapshot?.gpus?.length ?? 0) === 0 ? (
-            <p className="dsm-note">{t('noGpu')}</p>
-          ) : null}
-
-          <footer className="dsm-foot">
-            <span>
-              <span className="dsm-dot" data-status={status} />
-              {statusText}
-            </span>
-            <span>{updatedText}</span>
-          </footer>
-        </div>
-      )}
+      </span>
     </section>
   )
 }
 
 /**
- * One metric line: label, caption, headline value, then trailing details.
- *
- * Text only — no bar, gauge or sparkline. Everything is on a single baseline row
- * so the numeric columns line up down the tile; the caption is the only element
- * allowed to shrink, and its full text stays reachable through the tooltip.
+ * One metric item: label, headline value, then trailing details, all on the same
+ * baseline. Text only — no bar, gauge or sparkline.
  */
-function Row({ row }) {
+function Item({ row, t }) {
   return (
-    <div className="dsm-row">
-      <span className="dsm-label">{row.label}</span>
-      <span className="dsm-caption" title={row.captionTitle ?? undefined}>
-        {row.caption ?? ''}
-      </span>
-      <span className="dsm-readout">
-        <span className={`dsm-value dsm-${row.severity}`}>{row.valueText ?? '—'}</span>
-        {row.details.map((detail) => (
-          <span
-            key={detail.key}
-            className={detail.tone === 'muted' || detail.tone === 'ok' ? 'dsm-detail' : `dsm-detail dsm-${detail.tone}`}
-          >
-            {detail.text}
-          </span>
-        ))}
-      </span>
-    </div>
+    <span className="dsm-item" title={row.title ?? undefined}>
+      <span className="dsm-label">{t(row.labelKey, row.labelParams)}</span>
+      {row.valueText !== null ? (
+        <span className={`dsm-value dsm-${row.severity}`}>{row.valueText}</span>
+      ) : (
+        <span className="dsm-value dsm-unknown">—</span>
+      )}
+      {row.details.map((detail) => (
+        <span
+          key={detail.key}
+          className={detail.tone === 'muted' || detail.tone === 'ok' ? 'dsm-detail' : `dsm-detail dsm-${detail.tone}`}
+        >
+          {detail.text}
+        </span>
+      ))}
+    </span>
   )
-}
-
-/** Keep a header button's press from starting a drag. */
-function stopPointer(event) {
-  event.stopPropagation()
 }
 
 /** Read the viewport size, with a sane fallback for non-browser hosts. */
@@ -283,15 +246,6 @@ function readViewport() {
   }
 }
 
-/** `HH:MM:SS` in the user's locale for the "updated at" footer. */
-function formatClock(timestamp) {
-  try {
-    return new Date(timestamp).toLocaleTimeString()
-  } catch {
-    return ''
-  }
-}
-
 function RefreshIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -299,20 +253,6 @@ function RefreshIcon() {
         d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5H11"
         stroke="currentColor"
         strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function ChevronIcon({ collapsed }) {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d={collapsed ? 'M4 6.5 8 10.5l4-4' : 'M4 9.5 8 5.5l4 4'}
-        stroke="currentColor"
-        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

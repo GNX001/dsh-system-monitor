@@ -10,14 +10,13 @@ import {
   formatBytePair,
   formatBytes,
   formatPercent,
+  formatRate,
   formatTemperature,
   formatWatts,
   loadOptions,
   normalizeOptions,
   normalizePosition,
   severityOf,
-  shortCpuName,
-  shortGpuName,
   temperatureSeverity,
   INTERVAL_CHOICES,
   STORAGE_KEY,
@@ -41,16 +40,19 @@ test('normalizeOptions clamps, coerces, and drops unknown keys', () => {
     intervalMs: 10,
     opacity: 5,
     enabled: 'yes',
-    collapsed: true,
+    showNetwork: false,
     position: { x: 10.4, y: -3 },
     bogus: 'ignored',
+    // An option dropped in a later release is discarded, not carried forward.
+    collapsed: true,
   })
   assert.equal(options.intervalMs, 500, 'below the floor clamps up')
   assert.equal(options.opacity, 1, 'above the ceiling clamps down')
   assert.equal(options.enabled, true, 'non-boolean falls back to the default')
-  assert.equal(options.collapsed, true)
+  assert.equal(options.showNetwork, false)
   assert.deepEqual(options.position, { x: 10, y: -3 })
   assert.equal('bogus' in options, false)
+  assert.equal('collapsed' in options, false, 'a removed option must not survive normalization')
 })
 
 test('normalizeOptions survives garbage without throwing', () => {
@@ -175,18 +177,18 @@ test('severity buckets are staged, not binary', () => {
   assert.equal(temperatureSeverity(undefined), 'unknown')
 })
 
-test('marketing names are shortened for a narrow tile', () => {
-  assert.equal(shortCpuName('AMD Ryzen 7 8845HS w/ Radeon 780M Graphics'), 'Ryzen 7 8845HS')
-  assert.equal(shortCpuName('Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz'), 'Core i7-9750H')
-  assert.equal(shortCpuName('Apple M3 Pro'), 'M3 Pro')
-  assert.equal(shortCpuName(''), null)
-  assert.equal(shortCpuName(null), null)
-
-  assert.equal(shortGpuName('NVIDIA GeForce RTX 5070 Ti Laptop GPU'), 'RTX 5070 Ti')
-  assert.equal(shortGpuName('AMD Radeon RX 7900 XTX'), 'Radeon RX 7900 XTX')
-  assert.equal(shortGpuName('Intel(R) Arc(TM) A770 Graphics Adapter'), 'Arc A770')
-  assert.equal(shortGpuName(''), null)
-  assert.ok(shortGpuName('NVIDIA GeForce RTX 4090 Laptop GPU With An Absurdly Long Suffix').length <= 22)
+test('throughput is formatted as a rate', () => {
+  assert.equal(formatRate(0), '0 B/s')
+  assert.equal(formatRate(512), '512 B/s')
+  assert.equal(formatRate(2048), '2.0 KB/s')
+  assert.equal(formatRate(240 * 1024), '240 KB/s')
+  assert.equal(formatRate(1.25 * 1024 ** 2), '1.3 MB/s')
+  assert.equal(formatRate(120 * 1024 ** 2), '120 MB/s')
+  assert.equal(formatRate(2 * 1024 ** 3), '2.0 GB/s')
+  // Unmeasurable rates are null, never 0 B/s.
+  assert.equal(formatRate(null), null)
+  assert.equal(formatRate(Number.NaN), null)
+  assert.equal(formatRate(-1), null)
 })
 
 test('the tile stacks above conversation content but below DSH menus', () => {
@@ -197,23 +199,23 @@ test('the tile stacks above conversation content but below DSH menus', () => {
   assert.ok(TILE_Z_INDEX < 1000, `tile z-index ${TILE_Z_INDEX} would cover DSH menus and modals`)
 })
 
-test('tile geometry keeps the tile inside the viewport', () => {
+test('tile geometry keeps the capsule inside the viewport', () => {
   const viewport = { width: 1200, height: 800 }
-  const size = { width: 300, height: 200 }
+  const size = { width: 620, height: 30 }
 
   assert.deepEqual(clampTilePosition({ x: -50, y: -50 }, size, viewport), { x: 4, y: 4 })
-  assert.deepEqual(clampTilePosition({ x: 9999, y: 9999 }, size, viewport), { x: 896, y: 596 })
+  assert.deepEqual(clampTilePosition({ x: 9999, y: 9999 }, size, viewport), { x: 576, y: 766 })
 
   const resting = defaultTilePosition(size, viewport)
-  assert.equal(resting.x, 1200 - 300 - 20)
+  assert.equal(resting.x, 1200 - 620 - 20)
   assert.equal(resting.y, 76)
-  // A viewport narrower than the tile must not produce a negative coordinate.
+  // A viewport narrower than the capsule must not produce a negative coordinate.
   const tiny = defaultTilePosition(size, { width: 200, height: 150 })
   assert.equal(tiny.x, 4)
-  assert.equal(tiny.y, 4)
+  assert.equal(tiny.y, 76)
 })
 
-/** A representative snapshot with two GPUs. */
+/** A representative snapshot with two GPUs and a network readout. */
 function sampleSnapshot() {
   return {
     ts: Date.UTC(2026, 0, 2, 3, 4, 5),
@@ -239,48 +241,76 @@ function sampleSnapshot() {
       },
       { index: 1, name: 'AMD Radeon 780M', usage: null, temperature: null, powerWatts: null, memory: { usedBytes: null, totalBytes: null } },
     ],
+    network: {
+      downloadBytesPerSec: 1.25 * 1024 ** 2,
+      uploadBytesPerSec: 240 * 1024,
+      source: 'windows-network-counters',
+      interfaces: [
+        { name: 'Realtek Gaming 2.5GbE Family Controller', counted: true, downloadBytesPerSec: 1.25 * 1024 ** 2, uploadBytesPerSec: 240 * 1024 },
+        { name: 'Loopback Pseudo-Interface 1', counted: false, downloadBytesPerSec: 9e9, uploadBytesPerSec: 9e9 },
+      ],
+    },
     errors: [],
   }
 }
 
-test('the view model formats every row for direct rendering', () => {
+test('the view model formats every item for direct rendering', () => {
   const view = buildViewModel(sampleSnapshot(), DEFAULT_OPTIONS)
 
   assert.equal(view.ok, true)
-  assert.equal(view.rows.length, 4, 'CPU + memory + two GPUs')
+  assert.equal(view.rows.length, 5, 'CPU + memory + two GPUs + network')
 
   const [cpu, memory, gpu0, gpu1] = view.rows
-  assert.equal(cpu.label, 'CPU')
-  assert.equal(cpu.caption, 'Ryzen 7 8845HS')
+  assert.equal(cpu.labelKey, 'labelCpu')
   assert.equal(cpu.valueText, '23%')
   assert.equal(cpu.severity, 'ok')
   assert.deepEqual(cpu.details.map((detail) => detail.text), ['81.9°C'])
-  assert.match(cpu.captionTitle, /AMD Ryzen 7 8845HS/, 'the untruncated model stays in the tooltip')
-  assert.match(cpu.captionTitle, /4 threads/)
+  assert.match(cpu.title, /AMD Ryzen 7 8845HS/, 'the untruncated model stays in the tooltip')
+  assert.match(cpu.title, /4T/, 'the thread count is language-neutral')
 
-  assert.equal(memory.label, 'MEM')
+  assert.equal(memory.labelKey, 'labelMem')
   assert.equal(memory.valueText, '61%')
   assert.deepEqual(memory.details.map((detail) => detail.text), ['19.4/32.0 GB'])
 
-  assert.equal(gpu0.label, 'GPU0', 'a multi-GPU machine numbers its rows')
-  assert.equal(gpu0.caption, 'RTX 5070 Ti')
+  assert.deepEqual([gpu0.labelKey, gpu0.labelParams], ['labelGpuN', { n: 0 }], 'a multi-GPU machine numbers its items')
+  assert.equal(gpu0.title, 'NVIDIA GeForce RTX 5070 Ti Laptop GPU')
   assert.equal(gpu0.valueText, '42%')
   assert.deepEqual(gpu0.details.map((detail) => detail.text), ['61°C', '4.0/12.0 GB'])
 
-  assert.equal(gpu1.label, 'GPU1')
+  assert.deepEqual([gpu1.labelKey, gpu1.labelParams], ['labelGpuN', { n: 1 }])
   assert.equal(gpu1.valueText, null, 'an unknown reading renders as "no data"')
   assert.deepEqual(gpu1.details, [])
 })
 
-test('a row carries text only — no gauge, bar or per-core series', () => {
+test('the network item reports both directions', () => {
+  const network = buildViewModel(sampleSnapshot(), DEFAULT_OPTIONS).rows.at(-1)
+  assert.equal(network.labelKey, 'labelNet')
+  assert.equal(network.valueText, '↓ 1.3 MB/s', 'download is the headline value')
+  assert.deepEqual(network.details.map((detail) => detail.text), ['↑ 240 KB/s'])
+  assert.equal(network.severity, 'ok', 'throughput has no red threshold')
+  // Only the counted adapter is named; the excluded loopback is not.
+  assert.equal(network.title, 'Realtek Gaming 2.5GbE Family Controller')
+})
+
+test('an unmeasurable network rate says so instead of showing 0 B/s', () => {
+  const snapshot = sampleSnapshot()
+  snapshot.network = { downloadBytesPerSec: null, uploadBytesPerSec: null, source: 'unsupported', interfaces: [] }
+  const network = buildViewModel(snapshot, DEFAULT_OPTIONS).rows.at(-1)
+  assert.equal(network.valueText, null)
+  assert.deepEqual(network.details, [])
+  assert.equal(network.severity, 'unknown')
+  assert.equal(network.title, 'unsupported', 'the tooltip still explains where it looked')
+})
+
+test('an item carries text only — no gauge, bar or per-core series', () => {
   // The tile is a readout: text fields and nothing a component would have to
   // draw as a chart. A stray numeric field here is how a bar would creep back.
   const row = buildViewModel(sampleSnapshot(), DEFAULT_OPTIONS).rows[0]
   assert.deepEqual(
     Object.keys(row).sort(),
-    ['caption', 'captionTitle', 'details', 'key', 'label', 'severity', 'valueText']
+    ['details', 'key', 'labelKey', 'labelParams', 'severity', 'title', 'valueText']
   )
-  for (const value of [row.caption, row.valueText, ...row.details.map((detail) => detail.text)]) {
+  for (const value of [row.valueText, row.title, ...row.details.map((detail) => detail.text)]) {
     assert.equal(typeof value, 'string')
   }
 })
@@ -288,16 +318,17 @@ test('a row carries text only — no gauge, bar or per-core series', () => {
 test('a single GPU is labelled GPU, not GPU0', () => {
   const snapshot = sampleSnapshot()
   snapshot.gpus = snapshot.gpus.slice(0, 1)
-  assert.equal(buildViewModel(snapshot, DEFAULT_OPTIONS).rows[2].label, 'GPU')
+  const row = buildViewModel(snapshot, DEFAULT_OPTIONS).rows[2]
+  assert.equal(row.labelKey, 'labelGpu')
+  assert.equal(row.labelParams, undefined, 'a lone adapter gets no number')
 })
 
 test('the view model honors every display toggle', () => {
-  const onlyMemory = buildViewModel(sampleSnapshot(), {
-    ...DEFAULT_OPTIONS,
-    showCpu: false,
-    showGpu: false,
-  })
-  assert.deepEqual(onlyMemory.rows.map((row) => row.label), ['MEM'])
+  const labelsFor = (options) => buildViewModel(sampleSnapshot(), { ...DEFAULT_OPTIONS, ...options }).rows.map((row) => row.labelKey)
+
+  assert.deepEqual(labelsFor({ showCpu: false, showGpu: false }), ['labelMem', 'labelNet'])
+  assert.deepEqual(labelsFor({ showMemory: false, showNetwork: false }), ['labelCpu', 'labelGpuN', 'labelGpuN'])
+  assert.deepEqual(labelsFor({ showNetwork: false, showGpu: false, showCpu: false }), ['labelMem'])
 
   const noTemperatures = buildViewModel(sampleSnapshot(), {
     ...DEFAULT_OPTIONS,
@@ -332,12 +363,20 @@ test('both dictionaries stay in sync and format placeholders', () => {
   assert.deepEqual(Object.keys(zh).sort(), Object.keys(en).sort())
   assert.equal(zh.title, '系统监视')
   assert.equal(en.title, 'System monitor')
+  // The short metric tags are the same in both languages by design; only the
+  // network tag is translated, because it has no universal short form.
+  for (const tag of ['labelCpu', 'labelMem', 'labelGpu', 'labelGpuN']) {
+    assert.equal(zh[tag], en[tag], tag)
+  }
+  assert.equal(zh.labelNet, '网速')
+  assert.equal(en.labelNet, 'NET')
   assert.equal(format('{n} 秒', { n: 2 }), '2 秒')
   assert.equal(format('{a} and {b}', { b: 2, a: 1 }), '1 and 2')
   assert.equal(format('no placeholders'), 'no placeholders')
   assert.equal(format('{missing}', {}), '{missing}')
   assert.equal(bindDictionary(zh)('intervalSecond', { n: 2 }), '2 秒')
   assert.equal(bindDictionary(en)('intervalSecond', { n: 2 }), '2s')
+  assert.equal(bindDictionary(zh)('labelGpuN', { n: 1 }), 'GPU1')
   assert.equal(bindDictionary(en)('doesNotExist'), 'doesNotExist')
 })
 

@@ -2,17 +2,11 @@
 
 English | [中文](README.zh.md)
 
-A floating system-monitor tile for the **DeepSeek Harness** web GUI: live CPU,
-memory and every GPU on the machine — utilization, temperature, VRAM and power
-draw — as a plain-text readout in a draggable tile that stays out of the way.
+A floating status capsule for the **DeepSeek Harness** web GUI: CPU, memory, every
+GPU and network throughput as one line of plain text.
 
 ```
-  ⣿  SYSTEM MONITOR              ⟳   ⌄   ✕      ← drag the header
-  ─────────────────────────────────────────────
-  CPU  Ryzen 9 8940HX      9.6%   78.9°C
-  MEM                       43%   13.4/31.2 GB
-  GPU  RTX 5070 Ti           0%   51°C   0/11.9 GB
-  ● dev-box                         Updated 04:31
+  ⣿ CPU 9.6% 78.9°C 丨 MEM 43% 13.4/31.2 GB 丨 GPU 0% 51°C 0/11.9 GB 丨 网速 ↓ 1.3 MB/s ↑ 240 KB/s  ⟳ ✕
 ```
 
 *(A layout sketch, not a screenshot. The real colors come from your DSH theme —
@@ -20,23 +14,28 @@ see [Theming and stacking](#theming-and-stacking).)*
 
 ## Features
 
-- **Text only** — one aligned line per metric: label, name, headline value, then
-  trailing details. No bars, gauges or sparklines; it is a readout, not a chart.
-- **CPU** — utilization, plus a CPU temperature where the platform exposes one.
-  The full model name and thread count live in the row's tooltip.
+- **One line, text only** — a horizontal capsule: drag grip, then each metric
+  separated by `丨`, then refresh and hide. No bars, gauges or sparklines; it is a
+  readout, not a chart. It wraps onto a second line rather than clipping a metric
+  on a narrow window.
+- **CPU** — utilization and temperature. The full model name and thread count are
+  in the item's tooltip, so the line stays short without losing them.
 - **Memory** — used/total in a shared unit, using the same "available" accounting
   Windows Task Manager and macOS Activity Monitor show.
-- **Every GPU** — one row per adapter with utilization, temperature, VRAM used /
-  total and (optionally) power draw. A hybrid laptop reports both the discrete
-  and the integrated GPU.
-- **Follows your DSH theme** — every color is a DSH design token, so the tile
+- **Every GPU** — one item per adapter with utilization, temperature, VRAM and
+  (optionally) power draw. A hybrid laptop reports both the discrete and the
+  integrated GPU.
+- **网速 / NET** — download and upload throughput, from the operating system's own
+  network counters, with loopback and virtual adapters excluded so the total is
+  not double-counted.
+- **Follows your DSH theme** — every color is a DSH design token, so the capsule
   matches the built-in light/dark switch and third-party themes such as
   Catppuccin, and re-tints the instant you change theme.
-- **Floating and draggable** — park it anywhere; the position, opacity and
-  visible sections persist across reloads.
+- **Floating and draggable** — drag it by anywhere on the capsule (buttons
+  excluded); the position and opacity persist across reloads.
 - **Honest about missing data** — a counter the platform does not implement shows
-  `—`, never a fabricated `0`. The tile is resilient: a missing vendor tool
-  degrades one metric, it never blanks the widget.
+  `—`, never a fabricated `0`. A missing vendor tool degrades one metric, it never
+  blanks the capsule.
 - **Loopback-only, read-only** — the host half serves two GET routes fenced to
   the local machine. No writes, no network egress, no elevation, no drivers.
 - **Bilingual** — English and Chinese, following the DSH locale setting.
@@ -57,10 +56,12 @@ Platform coverage for each reading:
 | CPU temperature | ✅ ACPI thermal zones via `typeperf` | ✅ `/sys/class/thermal` + `coretemp`/`k10temp` | ❌ needs root (`powermetrics`) |
 | Memory | ✅ | ✅ | ✅ |
 | GPU utilization / temp / VRAM / power | ✅ NVIDIA via `nvidia-smi`; utilization-only fallback via Windows GPU performance counters | ✅ NVIDIA via `nvidia-smi`; AMD via `amdgpu` sysfs | ❌ |
+| Network throughput | ✅ PDH network counters via `typeperf` | ✅ `/proc/net/dev` | ❌ |
 
-Row by row: **CPU usage and memory work everywhere Node runs.** GPU and CPU
-temperature need a source the operating system actually publishes; where it
-does not exist, that one reading is blank and the rest keep working.
+Row by row: **CPU usage, memory and network work everywhere the operating system
+publishes counters.** GPU and CPU temperature need a source the operating system
+actually provides; where it does not exist, that one reading is blank and the
+rest keep working.
 
 ## Install
 
@@ -100,41 +101,42 @@ top-right corner, and **Settings → System monitor tile** gains a section for i
 
 | Action | How |
 | --- | --- |
-| Move the tile | Drag its header bar |
-| Collapse / expand | The `⌄` button, or double-click the header |
+| Move the capsule | Drag anywhere on it except its buttons |
 | Refresh immediately | The `⟳` button (forces a fresh hardware probe) |
-| Hide the tile | The `✕` button — reopen it in **Settings → System monitor tile** |
+| Hide the capsule | The `✕` button — reopen it in **Settings → System monitor tile** |
 | Configure | **Settings → System monitor tile** |
 
 Everything configurable lives in DSH's own Settings, not in a popover on the
-widget:
+capsule:
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| Show the floating tile | on | The way back after hiding it |
+| Show the floating capsule | on | The way back after hiding it |
 | Refresh interval | 1.5 s | 1 s – 10 s |
 | Opacity | 94 % | 40 % – 100 % |
-| CPU / CPU temperature / Memory / GPU | on | Section visibility |
+| CPU / CPU temperature / Memory / GPU | on | Item visibility |
 | GPU temperature / VRAM / power draw | temp + VRAM on, power off | |
-| Compact mode | off | Tighter rows |
+| Network speed (up and down) | on | Both directions always shown together |
+| Compact mode | off | Tighter padding and type |
 | Reset position / Restore defaults | — | |
 
 ## Theming and stacking
 
-**Colors.** The tile owns no palette. Every color is a DSH design token
+**Colors.** The capsule owns no palette. Every color is a DSH design token
 (`--dsw-alias-bg-layer-2`, `--dsw-alias-label-primary`, `--dsw-alias-state-warn-primary`,
 …), which the theme plugin declares on `body` for the light theme and on
-`body[data-ds-dark-theme]` for the dark one. The tile is a child of `body`, so it
-inherits those declarations and the browser re-resolves them the moment the theme
-changes — no listener, no re-render, and third-party themes such as Catppuccin
-and neu-theme are followed because they rewrite the same tokens. Each reference
-carries a literal fallback, so the tile still renders where the tokens are absent.
+`body[data-ds-dark-theme]` for the dark one. The capsule is a child of `body`, so
+it inherits those declarations and the browser re-resolves them the moment the
+theme changes — no listener, no re-render, and third-party themes such as
+Catppuccin and neu-theme are followed because they rewrite the same tokens. Each
+reference carries a literal fallback, so it still renders where the tokens are
+absent.
 
-**Stacking.** The tile is fixed at `z-index: 900`. That has to sit between two
+**Stacking.** The capsule is fixed at `z-index: 900`. That has to sit between two
 layers: conversation content (code blocks and tool cards use `z-index: 1`–`12`,
 and because none of their ancestors creates a stacking context they paint over a
 `z-index: auto` fixed element) and DSH's own menus and modals (`1000`+). So the
-tile covers a code block, and opening a menu still covers the tile.
+capsule covers a code block, and opening a menu still covers the capsule.
 
 ## Configuration
 
@@ -150,13 +152,26 @@ the profile's `cordis.patch.yml`, under the row this plugin inserts:
         tickMs: 1000                  # CPU/memory cadence (in-process, cheap)
         gpuMs: 1500                   # GPU probe cadence (spawns nvidia-smi)
         cpuTemperatureMs: 5000        # CPU temperature cadence (spawns typeperf)
+        networkMs: 3000               # network throughput cadence (spawns typeperf)
         cpuTemperatureScale: auto     # auto | kelvin | decikelvin | decicelsius
         gpu: true                     # false = never probe GPUs
         cpuTemperature: true          # false = never probe CPU temperature
+        network: true                 # false = never probe network throughput
+        networkExclude: []            # adapter name fragments to ignore (see below)
+        networkInclude: []            # fragments to count even if excluded
         allowRefresh: true            # false = reject ?refresh=1
         nvidiaSmiPath: nvidia-smi     # name or absolute path
         enabled: true                 # false = mount nothing at all
 ```
+
+`networkExclude` defaults to a list of loopback, VPN/overlay and virtual adapter
+fragments (`loopback`, `pseudo`, `virtual`, `isatap`, `teredo`, `vmware`, `wsl`,
+`wireguard`, `tailscale`, `docker`, and so on), plus any Windows duplicate
+instance suffixed `_2`. That matters: a loopback or VPN adapter carries the *same*
+packets as the physical one, so counting both doubles the reading — and a local
+dev server alone can produce gigabytes of loopback traffic. The snapshot lists
+every adapter with a `counted` flag, so you can see exactly what was included
+before overriding anything.
 
 `cpuTemperatureScale` exists because ACPI thermal zones are reported in
 different units by different providers; `auto` detects the unit from the
@@ -278,6 +293,22 @@ set carries no temperature and no VRAM capacity, so those stay `null`.
 **GPU, AMD on Linux** — `amdgpu` sysfs: `gpu_busy_percent`, `mem_info_vram_used`
 / `mem_info_vram_total`, and the `hwmon` temperature nodes. No process needed.
 
+**Network throughput, Windows** — the PDH counters
+`\Network Interface(*)\Bytes Received/sec` and `\Bytes Sent/sec`, read with the
+same `typeperf` call pattern as the thermal zones. Those counters are already
+*rates*, so no differencing is needed; the columns are counter-major (every
+`Received` instance, then every `Sent` one), so the direction is read from each
+header path rather than assumed from the column position. Only adapters passing
+the exclusion filter are summed.
+
+**Network throughput, Linux** — `/proc/net/dev`, which carries *cumulative* byte
+counts. This is the one reading that is differenced rather than used directly, so
+the first sample after start has no interval to measure and reports `—`, exactly
+like CPU utilization.
+
+**Throughput is never a temperature-style alarm** — it has no meaningful
+threshold, so the value never turns amber or red.
+
 **Zero is treated as "no reading"** for every temperature path: ACPI reports `0`
 for an absent sensor and kernel drivers publish `0` for an unpopulated one.
 Reporting that as a genuine 0 °C would be worse than reporting nothing.
@@ -306,9 +337,20 @@ specific reason.
 **The temperature looks wrong by a fixed factor.**
 Set `cpuTemperatureScale` — see the unit discussion above.
 
-**The tile responds slowly, or a machine feels busier.**
-Raise `cpuTemperatureMs` (the `typeperf` probe is the most expensive reading) or
-set `cpuTemperature: false`. CPU and memory cost nothing measurable.
+**网速 / NET shows `—` or stays at 0 B/s.**
+`0 B/s` means the counters were read and the machine is simply idle, which is
+correct. `—` means nothing could be measured: macOS has no non-root source
+(unsupported), or on Linux the first sample had no interval yet — the next poll
+resolves it. To see what was counted, read `network.interfaces` in the snapshot:
+each entry carries a `counted` flag. If your traffic runs over an adapter the
+default filter drops (a VPN, or a virtual switch), add a fragment to
+`networkInclude`.
+
+**The capsule responds slowly, or a machine feels busier.**
+Each of `gpuMs`, `cpuTemperatureMs` and `networkMs` controls one short-lived
+helper process. Raise the cadence, or set `gpu: false` / `cpuTemperature: false`
+/ `network: false` to switch a probe off entirely. CPU, memory and the CPU rate
+counters cost nothing measurable.
 
 ## Development
 

@@ -10,7 +10,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 5))
  * collectors, so cadence can be asserted exactly without waiting.
  */
 function harness(overrides = {}) {
-  const state = { now: 1_000_000, timers: new Map(), nextTimer: 1, gpuCalls: 0, temperatureCalls: 0, memoryCalls: 0 }
+  const state = { now: 1_000_000, timers: new Map(), nextTimer: 1, gpuCalls: 0, temperatureCalls: 0, networkCalls: 0, memoryCalls: 0 }
   const monitor = createMonitor({
     platform: 'win32',
     now: () => state.now,
@@ -32,6 +32,18 @@ function harness(overrides = {}) {
     collectCpuTemperature: () => {
       state.temperatureCalls += 1
       return { celsius: 50, zones: [{ name: 'stub', celsius: 50 }], source: 'stub', error: null }
+    },
+    // Stubbed like the others: without it the monitor would spawn a real
+    // typeperf, which is both slow and unavailable in a sandbox.
+    collectNetwork: () => {
+      state.networkCalls += 1
+      return {
+        ok: true,
+        downloadBytesPerSec: 1024,
+        uploadBytesPerSec: 512,
+        source: 'stub',
+        interfaces: [{ name: 'stub0', counted: true, downloadBytesPerSec: 1024, uploadBytesPerSec: 512 }],
+      }
     },
     ...overrides,
   })
@@ -63,6 +75,7 @@ test('start probes everything immediately and schedules the configured cadence',
 
   assert.equal(state.gpuCalls, 1, 'the first tick must not wait for the GPU cadence')
   assert.equal(state.temperatureCalls, 1)
+  assert.equal(state.networkCalls, 1)
   assert.equal(state.memoryCalls, 1)
   assert.equal(registeredInterval(), 1000)
 
@@ -71,8 +84,8 @@ test('start probes everything immediately and schedules the configured cadence',
   monitor.stop()
 })
 
-test('the GPU and temperature probes keep their own slower cadence', async () => {
-  const { monitor, state, fire, advance } = harness({ tickMs: 1000, gpuMs: 1500, cpuTemperatureMs: 5000 })
+test('the process-spawning probes keep their own slower cadence', async () => {
+  const { monitor, state, fire, advance } = harness({ tickMs: 1000, gpuMs: 1500, cpuTemperatureMs: 5000, networkMs: 3000 })
   monitor.start()
   await settle()
 
@@ -80,13 +93,19 @@ test('the GPU and temperature probes keep their own slower cadence', async () =>
   await fire()
   assert.equal(state.gpuCalls, 1, 'GPU must not be re-probed before gpuMs')
   assert.equal(state.temperatureCalls, 1, 'temperature must not be re-probed before cpuTemperatureMs')
+  assert.equal(state.networkCalls, 1, 'network must not be re-probed before networkMs')
   assert.equal(state.memoryCalls, 2, 'in-process counters refresh on every tick')
 
   advance(600)
   await fire()
   assert.equal(state.gpuCalls, 2, 'GPU is re-probed once gpuMs elapsed')
+  assert.equal(state.networkCalls, 1, 'network still has not reached its own cadence')
 
-  advance(4000)
+  advance(1600)
+  await fire()
+  assert.equal(state.networkCalls, 2, 'network follows its own cadence')
+
+  advance(2400)
   await fire()
   assert.equal(state.temperatureCalls, 2, 'temperature follows its own slower cadence')
   monitor.stop()
@@ -104,20 +123,25 @@ test('the cached GPU reading survives ticks that do not re-probe', async () => {
   monitor.stop()
 })
 
-test('refresh forces both probes and returns the fresh snapshot', async () => {
-  const { monitor, state } = harness({ gpuMs: 60_000, cpuTemperatureMs: 60_000 })
+test('refresh forces every probe and returns the fresh snapshot', async () => {
+  const { monitor, state } = harness({ gpuMs: 60_000, cpuTemperatureMs: 60_000, networkMs: 60_000 })
   await monitor.refresh()
   assert.equal(state.gpuCalls, 1)
   assert.equal(state.temperatureCalls, 1)
+  assert.equal(state.networkCalls, 1)
 
   const snapshot = await monitor.refresh()
   assert.equal(state.gpuCalls, 2, 'refresh ignores the cadence')
   assert.equal(state.temperatureCalls, 2)
+  assert.equal(state.networkCalls, 2)
   assert.equal(snapshot.cpu.temperature, 50)
   assert.equal(snapshot.cpu.usage, 42)
   assert.equal(snapshot.memory.usage, 75)
   assert.equal(snapshot.gpus.length, 1)
   assert.equal(snapshot.gpuSource, 'stub')
+  assert.equal(snapshot.network.downloadBytesPerSec, 1024)
+  assert.equal(snapshot.network.uploadBytesPerSec, 512)
+  assert.equal(snapshot.network.source, 'stub')
 })
 
 test('the snapshot is a detached clone, not live state', async () => {
@@ -160,14 +184,51 @@ test('the diagnostics list is bounded', async () => {
 })
 
 test('probing can be switched off per metric', async () => {
-  const { monitor, state } = harness({ gpu: false, cpuTemperature: false })
+  const { monitor, state } = harness({ gpu: false, cpuTemperature: false, network: false })
   const snapshot = await monitor.refresh()
   assert.equal(state.gpuCalls, 0)
   assert.equal(state.temperatureCalls, 0)
+  assert.equal(state.networkCalls, 0)
   assert.deepEqual(snapshot.gpus, [])
   assert.equal(snapshot.cpu.temperature, null)
+  assert.deepEqual(snapshot.network, { downloadBytesPerSec: null, uploadBytesPerSec: null, source: null, interfaces: [] })
   assert.equal(monitor.config.gpu, false)
   assert.equal(monitor.config.cpuTemperature, false)
+  assert.equal(monitor.config.network, false)
+})
+
+test('a failing network probe degrades only the network reading', async () => {
+  const { monitor } = harness({
+    collectNetwork: () => ({ ok: false, downloadBytesPerSec: null, uploadBytesPerSec: null, interfaces: [], error: 'no adapters', source: 'windows-network-counters' }),
+  })
+  const snapshot = await monitor.refresh()
+
+  assert.equal(snapshot.network.downloadBytesPerSec, null)
+  assert.equal(snapshot.network.uploadBytesPerSec, null)
+  assert.equal(snapshot.network.source, 'windows-network-counters')
+  assert.deepEqual(snapshot.errors, [{ source: 'network', message: 'no adapters' }])
+  // Everything else kept working.
+  assert.equal(snapshot.cpu.usage, 42)
+  assert.equal(snapshot.memory.usage, 75)
+  assert.equal(snapshot.gpus.length, 1)
+})
+
+test("a Linux first sample with no interval yet is not reported as an error", async () => {
+  const { monitor } = harness({
+    collectNetwork: () => ({
+      ok: true,
+      downloadBytesPerSec: null,
+      uploadBytesPerSec: null,
+      interfaces: [{ name: 'eth0', counted: true }],
+      error: null,
+      pending: 'first sample: no interval to measure yet',
+      source: 'proc-net-dev',
+    }),
+  })
+  const snapshot = await monitor.refresh()
+  assert.deepEqual(snapshot.errors, [], 'a missing baseline is not a failure')
+  assert.equal(snapshot.network.downloadBytesPerSec, null)
+  assert.equal(snapshot.network.interfaces.length, 1)
 })
 
 test('a rejected collector promise is contained too', async () => {

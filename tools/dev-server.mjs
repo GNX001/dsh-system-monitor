@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { apply, DEFAULT_CONFIG, ROUTES, VERSION } from '../lib/index.js'
 import { DEFAULT_OPTIONS, buildViewModel } from '../src/client/model.js'
+import { GRIP_GLYPH, ITEM_SEPARATOR } from '../src/client/styles.js'
+import { bindDictionary, zh } from '../src/client/locales.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.DSM_DEV_PORT ?? 43199)
@@ -247,18 +249,20 @@ server.listen(PORT, '127.0.0.1', async () => {
     const snapshot = await response.json()
     console.log(`[dev-server] snapshot status=${response.status}`)
 
-    // Text preview of exactly what the tile paints, so the layout can be read
-    // without a browser.
+    // Text preview of exactly what the capsule paints, so the layout can be read
+    // without a browser. Labels resolve through the Chinese dictionary; the
+    // browser resolves them through the DSH locale service instead.
     const view = buildViewModel(snapshot, DEFAULT_OPTIONS)
-    console.log('[dev-server] tile rows (as rendered):')
-    console.log(`  ┌${'─'.repeat(58)}`)
-    for (const row of view.rows) {
-      const left = `${row.label.padEnd(4)}${(row.caption ?? '').padEnd(24)}`
-      const right = [row.valueText ?? '—', ...row.details.map((detail) => detail.text)].join('  ')
-      console.log(`  │ ${left}${right}`)
+    const t = bindDictionary(zh)
+    const parts = view.rows.map((row) => {
+      const details = row.details.map((detail) => detail.text).join(' ')
+      return [t(row.labelKey, row.labelParams), row.valueText ?? '—', details].filter(Boolean).join(' ')
+    })
+    console.log('[dev-server] capsule, as rendered:')
+    console.log(`  ${GRIP_GLYPH} ${parts.join(` ${ITEM_SEPARATOR} `)}  ⟳  ✕`)
+    if (snapshot.errors.length > 0) {
+      console.log(`[dev-server] errors: ${snapshot.errors.map((entry) => `${entry.source}: ${entry.message}`).join(' | ')}`)
     }
-    console.log(`  └${'─'.repeat(58)}`)
-    if (snapshot.errors.length > 0) console.log(`[dev-server] errors: ${JSON.stringify(snapshot.errors)}`)
   } catch (error) {
     console.error('[dev-server] first snapshot failed:', error)
   }

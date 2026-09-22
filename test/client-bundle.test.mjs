@@ -101,6 +101,14 @@ function snapshot() {
       },
     ],
     gpuSource: 'nvidia-smi',
+    network: {
+      downloadBytesPerSec: 1.25 * 1024 ** 2,
+      uploadBytesPerSec: 240 * 1024,
+      source: 'windows-network-counters',
+      interfaces: [
+        { name: 'Realtek Gaming 2.5GbE Family Controller', counted: true, downloadBytesPerSec: 1.25 * 1024 ** 2, uploadBytesPerSec: 240 * 1024 },
+      ],
+    },
     errors: [],
     ticks: 7,
   }
@@ -218,7 +226,7 @@ async function mount({ options, payload = snapshot(), status = 200 } = {}) {
     calls,
     container: document.getElementById('dsh-system-monitor-root'),
     tile: () => document.querySelector('.dsm-tile'),
-    text: () => document.querySelector('.dsm-body')?.textContent ?? '',
+    text: () => document.querySelector('.dsm-tile')?.textContent ?? '',
   }
 }
 
@@ -249,12 +257,12 @@ test('the tile mounts into the document body and renders real readings', async (
 
   assert.ok(container, 'a body-attached container is created')
   assert.ok(tile(), 'the tile is rendered')
-  assert.equal(document.querySelector('.dsm-title').textContent, '系统监视')
+  assert.equal(tile().getAttribute('aria-label'), '系统监视')
 
-  for (const label of ['CPU', 'MEM', 'GPU']) {
+  for (const label of ['CPU', 'MEM', 'GPU', '网速']) {
     assert.ok(
       [...document.querySelectorAll('.dsm-label')].some((node) => node.textContent === label),
-      `missing the ${label} row`
+      `missing the ${label} item`
     )
   }
   assert.match(text(), /23%/, 'CPU utilization')
@@ -264,9 +272,25 @@ test('the tile mounts into the document body and renders real readings', async (
   assert.match(text(), /61°C/, 'GPU temperature')
   assert.match(text(), /19\.4\/32\.0 GB/, 'memory size')
   assert.match(text(), /4\.0\/12\.0 GB/, 'VRAM')
-  assert.match(text(), /Ryzen 7 8845HS/, 'shortened CPU name')
-  assert.match(text(), /RTX 5070 Ti/, 'shortened GPU name')
-  assert.match(text(), /dev-box/, 'the footer names the host')
+  assert.match(text(), /↓ 1\.3 MB\/s/, 'download rate')
+  assert.match(text(), /↑ 240 KB\/s/, 'upload rate')
+})
+
+test('the readings sit on one line, separated by the requested 丨 divider', async () => {
+  const { tile } = await mount()
+
+  // The capsule is one flex row: grip, items, actions. Nothing is stacked.
+  assert.equal(tile().querySelectorAll('.dsm-item').length, 4, 'CPU, MEM, GPU and 网速')
+  const separators = [...tile().querySelectorAll('.dsm-sep')].map((node) => node.textContent)
+  assert.deepEqual(separators, ['丨', '丨', '丨'], 'one divider between each pair of items')
+
+  const order = [...tile().querySelector('.dsm-items').children].map((node) =>
+    node.classList.contains('dsm-sep') ? '丨' : node.querySelector('.dsm-label').textContent
+  )
+  assert.deepEqual(order, ['CPU', '丨', 'MEM', '丨', 'GPU', '丨', '网速'])
+
+  assert.equal(tile().querySelector('.dsm-grip').textContent, '⣿', 'the grip leads the capsule')
+  assert.equal(tile().querySelectorAll('.dsm-actions .dsm-btn').length, 2, 'refresh and hide, and nothing else')
 })
 
 test('the tile renders text only — no bar or progress widget', async () => {
@@ -292,7 +316,6 @@ test('the tile colors itself from DSH theme tokens, so a theme switch follows', 
   // built-in light/dark switch without any JavaScript.
   for (const token of [
     '--dsw-alias-bg-layer-2',
-    '--dsw-alias-bg-layer-3',
     '--dsw-alias-label-primary',
     '--dsw-alias-label-secondary',
     '--dsw-alias-label-tertiary',
@@ -329,37 +352,53 @@ test('the tile polls the host route and only forces a re-probe on demand', async
   assert.ok(calls.length >= 2, `the tile must keep polling, saw ${calls.length} requests`)
   assert.equal(calls[1], '/api/dsh-system-monitor/snapshot')
 
-  const refresh = tile().querySelectorAll('.dsm-head .dsm-btn')[0]
+  const refresh = tile().querySelectorAll('.dsm-actions .dsm-btn')[0]
   await click(refresh)
   assert.equal(calls.at(-1), '/api/dsh-system-monitor/snapshot?refresh=1', 'the refresh button forces a re-probe')
 })
 
-test('an unreachable host shows the offline state instead of an empty tile', async () => {
+test('an unreachable host shows the offline state instead of an empty capsule', async () => {
   const { text, tile } = await mount({ status: 500 })
   assert.match(text(), /宿主插件未响应/)
   assert.ok(tile().querySelector('.dsm-note.dsm-err'))
-  assert.equal(tile().querySelector('.dsm-dot').getAttribute('data-status'), 'error')
+  assert.equal(tile().querySelector('.dsm-status').getAttribute('data-status'), 'error')
 })
 
-test('collapse hides the body, and double-clicking the header toggles it back', async () => {
+test('the whole capsule is the drag handle, but its buttons are not', async () => {
   const { tile } = await mount()
-  assert.ok(tile().querySelector('.dsm-body'))
+  const section = tile()
 
-  await click(tile().querySelectorAll('.dsm-head .dsm-btn')[1])
-  assert.equal(tile().querySelector('.dsm-body'), null, 'collapsed hides the rows')
-
+  // A press on the body starts a drag…
   await act(async () => {
-    tile().querySelector('.dsm-head').dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }))
+    section.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 40, clientY: 20 }))
+  })
+  // …and releasing it writes a position. jsdom has no pointer capture, so this
+  // only asserts the handler ran without throwing.
+  await act(async () => {
+    section.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true }))
   })
   await flush()
-  assert.ok(tile().querySelector('.dsm-body'), 'double-click restores the rows')
+  assert.ok(document.querySelector('.dsm-tile'), 'the capsule survives a drag gesture')
+
+  // A press that lands on a button must not be swallowed by the drag handler.
+  const button = tile().querySelector('.dsm-actions .dsm-btn')
+  let dragged = false
+  const original = section.setPointerCapture
+  section.setPointerCapture = () => {
+    dragged = true
+  }
+  await act(async () => {
+    button.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+  })
+  section.setPointerCapture = original
+  assert.equal(dragged, false, 'a button press must not begin a drag')
 })
 
 test('hiding the tile removes it and persists the choice', async () => {
   const { tile } = await mount()
   assert.ok(tile())
 
-  await click(tile().querySelectorAll('.dsm-head .dsm-btn')[2])
+  await click(tile().querySelectorAll('.dsm-actions .dsm-btn')[1])
   assert.equal(document.querySelector('.dsm-tile'), null, 'a hidden tile renders nothing')
   assert.match(window.localStorage.getItem(STORAGE_KEY), /"enabled":false/)
 })

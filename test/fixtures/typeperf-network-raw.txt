@@ -1,0 +1,7 @@
+﻿
+"(PDH-CSV 4.0)","\\GNXOOQ001\Network Interface(Realtek Gaming 2.5GbE Family Controller)\Bytes Received/sec","\\GNXOOQ001\Network Interface(UsbNcm Host Device)\Bytes Received/sec","\\GNXOOQ001\Network Interface(MediaTek Wi-Fi 6E MT7922 160MHz Wireless LAN Card)\Bytes Received/sec","\\GNXOOQ001\Network Interface(Realtek Gaming 2.5GbE Family Controller)\Bytes Sent/sec","\\GNXOOQ001\Network Interface(UsbNcm Host Device)\Bytes Sent/sec","\\GNXOOQ001\Network Interface(MediaTek Wi-Fi 6E MT7922 160MHz Wireless LAN Card)\Bytes Sent/sec"
+"09/23/2026 05:41:04.582","0.000000","0.000000","228.897902","0.000000","0.000000","316.476230"
+Exiting, please wait...                         
+The command completed successfully.
+
+

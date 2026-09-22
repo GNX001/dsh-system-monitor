@@ -19,7 +19,6 @@ export const INTERVAL_CHOICES = [1000, 1500, 2000, 3000, 5000, 10000]
 /** Tile options and their defaults. */
 export const DEFAULT_OPTIONS = Object.freeze({
   enabled: true,
-  collapsed: false,
   intervalMs: 1500,
   opacity: 0.94,
   position: null,
@@ -30,6 +29,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   showGpuTemperature: true,
   showGpuMemory: true,
   showPower: false,
+  showNetwork: true,
 })
 
 const MIN_OPACITY = 0.4
@@ -279,8 +279,7 @@ export function formatBytePair(usedBytes, totalBytes) {
   return `${one(usedBytes)}/${one(totalBytes)} ${unit}`
 }
 
-/** Format a percentage, keeping one decimal only below 10%. */
-export function formatPercent(value) {
+/** Format a percentage, keeping one decimal only below 10%. */export function formatPercent(value) {
   if (!Number.isFinite(value)) return null
   const clamped = Math.min(100, Math.max(0, value))
   return `${clamped < 10 && clamped > 0 ? clamped.toFixed(1) : Math.round(clamped)}%`
@@ -315,43 +314,36 @@ export function temperatureSeverity(celsius) {
 }
 
 /**
- * Shorten a CPU marketing string to something that fits a 260px tile.
- * `"AMD Ryzen 7 8845HS w/ Radeon 780M Graphics"` → `"Ryzen 7 8845HS"`.
+ * Format a throughput in bytes per second, the way a network readout writes it:
+ * `1.2 MB/s`, `240 KB/s`, `0 B/s`.
+ * @returns the formatted rate, or null when it is unusable.
  */
-export function shortCpuName(model) {
-  if (typeof model !== 'string' || model.trim() === '') return null
-  let text = model.trim()
-  text = text.replace(/\s*\((?:R|TM|C)\)/gi, '')
-  text = text.replace(/\s+(w\/|with)\s+.*$/i, '')
-  text = text.replace(/\s+(CPU|Processor)\s*@.*$/i, '')
-  text = text.replace(/^(AMD|Intel|Apple|Qualcomm)\s+/i, '')
-  text = text.replace(/\s+\d+-Core\s+Processor$/i, '')
-  return text.trim() === '' ? null : text.trim()
+export function formatRate(bytesPerSecond) {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond < 0) return null
+  const steps = [
+    [1024 ** 3, 'GB/s'],
+    [1024 ** 2, 'MB/s'],
+    [1024, 'KB/s'],
+  ]
+  for (const [scale, unit] of steps) {
+    if (bytesPerSecond >= scale) {
+      const value = bytesPerSecond / scale
+      return `${value.toFixed(value >= 100 ? 0 : 1)} ${unit}`
+    }
+  }
+  return `${Math.round(bytesPerSecond)} B/s`
 }
 
 /**
- * Shorten a GPU marketing string.
- * `"NVIDIA GeForce RTX 5070 Ti Laptop GPU"` → `"RTX 5070 Ti"`.
- */
-export function shortGpuName(name) {
-  if (typeof name !== 'string' || name.trim() === '') return null
-  let text = name.trim()
-  text = text.replace(/\s*\((?:R|TM|C)\)/gi, '')
-  text = text.replace(/^(NVIDIA|AMD|ATI|Intel|Apple|Advanced Micro Devices(,? Inc\.?)?)\s+/i, '')
-  text = text.replace(/^GeForce\s+/i, '')
-  text = text.replace(/\s+(Laptop GPU|Laptop|Mobile|Desktop|Graphics Adapter|GPU)$/i, '')
-  text = text.replace(/\s+/g, ' ').trim()
-  if (text === '') return null
-  return text.length > 22 ? `${text.slice(0, 21)}…` : text
-}
-
-/**
- * Reduce a host snapshot to the rows the tile paints.
+ * Reduce a host snapshot to the items the tile paints.
  *
  * This is the whole display contract, and it is deliberately **text-only**: each
- * row carries a short label, an optional caption, one right-aligned headline
- * value, and a list of trailing detail strings. `tile.jsx` sets them side by side
- * and adds no gauges, bars or charts — the tile is a readout, not a dashboard.
+ * item carries a localized label key, one headline value, and a list of trailing
+ * detail strings. `tile.jsx` lays them out along one line and adds no gauges,
+ * bars or charts — the tile is a readout, not a dashboard.
+ *
+ * Item names (CPU model, GPU model) are deliberately **not** part of the visible
+ * line; they ride in `title` so the readout stays narrow without losing them.
  *
  * @param snapshot - the payload from `/api/dsh-system-monitor/snapshot`.
  * @param options - resolved tile options.
@@ -370,6 +362,7 @@ export function buildViewModel(snapshot, options) {
     const gpus = Array.isArray(snapshot.gpus) ? snapshot.gpus : []
     gpus.forEach((gpu, index) => rows.push(gpuRow(gpu, resolved, index, gpus.length)))
   }
+  if (resolved.showNetwork !== false) rows.push(networkRow(snapshot.network))
 
   return {
     ok: true,
@@ -380,7 +373,7 @@ export function buildViewModel(snapshot, options) {
   }
 }
 
-/** Build the CPU row: utilization, temperature, and the core count as a tooltip. */
+/** Build the CPU item: utilization, then temperature. */
 function cpuRow(cpu, options) {
   if (cpu === null || typeof cpu !== 'object') return null
   const details = []
@@ -391,18 +384,17 @@ function cpuRow(cpu, options) {
   const model = typeof cpu.model === 'string' ? cpu.model.trim() : ''
   return {
     key: 'cpu',
-    label: 'CPU',
-    caption: shortCpuName(cpu.model),
-    // The full model string and core count live in the tooltip, so the visible
-    // line stays short without throwing the information away.
-    captionTitle: [model, cores === null ? null : `${cores} threads`].filter(Boolean).join(' · '),
+    labelKey: 'labelCpu',
+    labelParams: undefined,
+    // `32T` keeps the tooltip language-neutral, so no `t` is needed here.
+    title: [model, cores === null ? null : `${cores}T`].filter(Boolean).join(' · ') || null,
     valueText: formatPercent(cpu.usage),
     severity: severityOf(cpu.usage),
     details,
   }
 }
 
-/** Build the memory row. */
+/** Build the memory item. */
 function memoryRow(memory) {
   if (memory === null || typeof memory !== 'object') return null
   const size = formatBytePair(memory.usedBytes, memory.totalBytes)
@@ -410,16 +402,16 @@ function memoryRow(memory) {
   if (size !== null) details.push({ key: 'size', text: size, tone: 'muted' })
   return {
     key: 'memory',
-    label: 'MEM',
-    caption: null,
-    captionTitle: null,
+    labelKey: 'labelMem',
+    labelParams: undefined,
+    title: null,
     valueText: formatPercent(memory.usage),
     severity: severityOf(memory.usage),
     details,
   }
 }
 
-/** Build one row per GPU. */
+/** Build one item per GPU. */
 function gpuRow(gpu, options, index, total) {
   if (gpu === null || typeof gpu !== 'object') return null
   const details = []
@@ -433,13 +425,57 @@ function gpuRow(gpu, options, index, total) {
   if (options.showPower === true && Number.isFinite(gpu.powerWatts)) {
     details.push({ key: 'power', text: formatWatts(gpu.powerWatts), tone: 'muted' })
   }
+  const position = Number.isFinite(gpu.index) ? gpu.index : index
   return {
-    key: `gpu-${gpu.index ?? index}`,
-    label: total > 1 ? `GPU${gpu.index ?? index}` : 'GPU',
-    caption: shortGpuName(gpu.name) ?? 'GPU',
-    captionTitle: typeof gpu.name === 'string' ? gpu.name : null,
+    key: `gpu-${position}`,
+    // A single adapter reads "GPU"; a hybrid laptop numbers them.
+    labelKey: total > 1 ? 'labelGpuN' : 'labelGpu',
+    labelParams: total > 1 ? { n: position } : undefined,
+    title: typeof gpu.name === 'string' ? gpu.name : null,
     valueText: formatPercent(gpu.usage),
     severity: severityOf(gpu.usage),
     details,
   }
+}
+
+/**
+ * Build the network item: download as the headline value, upload as a detail.
+ * Both directions are requested by design — the arrows are what distinguish them.
+ */
+function networkRow(network) {
+  if (network === null || typeof network !== 'object') return null
+  const down = formatRate(network.downloadBytesPerSec)
+  const up = formatRate(network.uploadBytesPerSec)
+  if (down === null && up === null) {
+    // Nothing measurable (unsupported platform, or no baseline yet).
+    return {
+      key: 'network',
+      labelKey: 'labelNet',
+      labelParams: undefined,
+      title: countedAdapters(network),
+      valueText: null,
+      severity: 'unknown',
+      details: [],
+    }
+  }
+  const details = []
+  if (up !== null) details.push({ key: 'up', text: `↑ ${up}`, tone: 'muted' })
+  return {
+    key: 'network',
+    labelKey: 'labelNet',
+    labelParams: undefined,
+    title: countedAdapters(network),
+    valueText: down === null ? null : `↓ ${down}`,
+    // Throughput has no meaningful "hot" threshold, so it never turns red.
+    severity: 'ok',
+    details,
+  }
+}
+
+/** Tooltip text naming the adapters that contributed to the total. */
+function countedAdapters(network) {
+  const interfaces = Array.isArray(network.interfaces) ? network.interfaces : []
+  const names = interfaces.filter((entry) => entry?.counted === true).map((entry) => entry.name)
+  if (names.length === 0) return typeof network.source === 'string' ? network.source : null
+  return names.join(' · ')
 }

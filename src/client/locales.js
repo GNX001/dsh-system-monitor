@@ -2,14 +2,19 @@
  * Bilingual copy. Registered with the DSH locale service under
  * {@link LOCALE_NS}; the tile and the settings panel read strings through the
  * bound `t`. Keys are flat and identical across both dictionaries —
- * `test/locales.test.mjs` asserts the two stay in sync.
+ * `test/client-model.test.mjs` asserts the two stay in sync.
+ *
+ * `labelCpu` / `labelMem` / `labelGpu` are deliberately identical in both
+ * languages: they are the conventional short tags a status readout uses. Only
+ * the network tag is translated, because there is no equally universal short
+ * form for it.
  */
 
 export const zh = {
   title: '系统监视',
   settingsTitle: '系统监视磁贴',
   settingsHint:
-    '悬浮磁贴显示本机 CPU、内存与所有 GPU 的占用率；温度来自 Windows ACPI 热区计数器或 Linux 内核传感器，显存与功耗来自厂商工具（如 nvidia-smi）。所有数据仅在本机回环地址上读取。',
+    '悬浮磁贴以纯文字显示本机 CPU、内存、所有 GPU 与网速；温度来自 Windows ACPI 热区计数器或 Linux 内核传感器，显存与功耗来自厂商工具（如 nvidia-smi），网速来自系统自身的网络计数器。所有数据仅在本机回环地址上读取。',
   enable: '显示悬浮磁贴',
   enableHint: '关闭后磁贴会隐藏，可随时在此重新打开。',
   interval: '刷新间隔',
@@ -23,30 +28,27 @@ export const zh = {
   showGpuTemperature: 'GPU 温度',
   showGpuMemory: '显存',
   showPower: 'GPU 功耗',
+  showNetwork: '网速（上行与下行）',
   appearance: '外观',
   compact: '紧凑模式',
   resetPosition: '重置位置',
   resetAll: '恢复默认设置',
   refresh: '立即刷新',
-  collapse: '折叠',
-  expand: '展开',
   hide: '隐藏磁贴',
-  show: '显示监视磁贴',
-  openSettings: '打开设置',
   loading: '读取中…',
-  offline: '无法连接宿主，重试中',
-  noGpu: '未检测到 GPU',
-  updatedAt: '更新于 {time}',
-  never: '尚未更新',
-  hostUnavailable: '宿主插件未响应',
-  pluginsDisabled: '不支持此界面',
+  offline: '宿主插件未响应',
+  labelCpu: 'CPU',
+  labelMem: 'MEM',
+  labelGpu: 'GPU',
+  labelGpuN: 'GPU{n}',
+  labelNet: '网速',
 }
 
 export const en = {
   title: 'System monitor',
   settingsTitle: 'System monitor tile',
   settingsHint:
-    'The floating tile shows live CPU, memory and every GPU on this machine. Temperatures come from Windows ACPI thermal-zone counters or Linux kernel sensors; VRAM and power come from vendor tools such as nvidia-smi. Every reading is served over loopback only.',
+    'The floating tile is a plain-text readout of CPU, memory, every GPU and network throughput. Temperatures come from Windows ACPI thermal-zone counters or Linux kernel sensors; VRAM and power come from vendor tools such as nvidia-smi; throughput comes from the operating system\u2019s own network counters. Every reading is served over loopback only.',
   enable: 'Show the floating tile',
   enableHint: 'Turning this off hides the tile; reopen it here at any time.',
   interval: 'Refresh interval',
@@ -60,23 +62,20 @@ export const en = {
   showGpuTemperature: 'GPU temperature',
   showGpuMemory: 'VRAM',
   showPower: 'GPU power draw',
+  showNetwork: 'Network speed (up and down)',
   appearance: 'Appearance',
   compact: 'Compact mode',
   resetPosition: 'Reset position',
   resetAll: 'Restore defaults',
   refresh: 'Refresh now',
-  collapse: 'Collapse',
-  expand: 'Expand',
   hide: 'Hide the tile',
-  show: 'Show the system monitor',
-  openSettings: 'Open settings',
   loading: 'Reading…',
-  offline: 'Host unreachable, retrying',
-  noGpu: 'No GPU detected',
-  updatedAt: 'Updated {time}',
-  never: 'Not updated yet',
-  hostUnavailable: 'Host plugin not answering',
-  pluginsDisabled: 'Not supported in this interface',
+  offline: 'Host plugin not answering',
+  labelCpu: 'CPU',
+  labelMem: 'MEM',
+  labelGpu: 'GPU',
+  labelGpuN: 'GPU{n}',
+  labelNet: 'NET',
 }
 
 /** Substitution-based formatter used when the DSH locale service is absent. */
