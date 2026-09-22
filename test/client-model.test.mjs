@@ -7,7 +7,7 @@ import {
   createOptionsStore,
   createSafeStorage,
   defaultTilePosition,
-  detectTheme,
+  formatBytePair,
   formatBytes,
   formatPercent,
   formatTemperature,
@@ -15,8 +15,6 @@ import {
   loadOptions,
   normalizeOptions,
   normalizePosition,
-  parseCssColor,
-  relativeLuminance,
   severityOf,
   shortCpuName,
   shortGpuName,
@@ -24,6 +22,7 @@ import {
   INTERVAL_CHOICES,
   STORAGE_KEY,
 } from '../src/client/model.js'
+import { TILE_Z_INDEX } from '../src/client/styles.js'
 import { bindDictionary, en, format, zh } from '../src/client/locales.js'
 
 /** A `localStorage` stand-in backed by a Map. */
@@ -149,6 +148,22 @@ test('formatters match system-monitor conventions', () => {
   assert.equal(formatWatts(120), '120 W')
 })
 
+test('a used/total pair shares one unit, so the line stays short', () => {
+  assert.equal(formatBytePair(19.4 * 1024 ** 3, 32 * 1024 ** 3), '19.4/32.0 GB')
+  assert.equal(formatBytePair(4 * 1024 ** 3, 12 * 1024 ** 3), '4.0/12.0 GB')
+  // The reported bug: 0 bytes is not "0 KB" when the total is in GB.
+  assert.equal(formatBytePair(0, 12 * 1024 ** 3), '0/12.0 GB')
+  // The unit follows the total: below 1 GiB it is MB, at/above it is GB.
+  assert.equal(formatBytePair(512 * 1024 ** 2, 800 * 1024 ** 2), '512/800 MB')
+  assert.equal(formatBytePair(512 * 1024 ** 2, 1024 * 1024 ** 2), '0.5/1.0 GB')
+  // A 3-digit total drops the decimal to keep the column narrow.
+  assert.equal(formatBytePair(100 * 1024 ** 3, 128 * 1024 ** 3), '100/128 GB')
+  // No usable total: fall back to a single formatted value.
+  assert.equal(formatBytePair(4 * 1024 ** 3, null), '4.0 GB')
+  assert.equal(formatBytePair(Number.NaN, 12 * 1024 ** 3), '—/12.0 GB')
+  assert.equal(formatBytePair(null, 0), null)
+})
+
 test('severity buckets are staged, not binary', () => {
   assert.equal(severityOf(10), 'ok')
   assert.equal(severityOf(70), 'warn')
@@ -174,50 +189,23 @@ test('marketing names are shortened for a narrow tile', () => {
   assert.ok(shortGpuName('NVIDIA GeForce RTX 4090 Laptop GPU With An Absurdly Long Suffix').length <= 22)
 })
 
-test('CSS color parsing handles rgb/rgba/hex and rejects junk', () => {
-  assert.deepEqual(parseCssColor('rgb(10, 20, 30)'), { r: 10, g: 20, b: 30, alpha: 1 })
-  assert.deepEqual(parseCssColor('rgba(10,20,30,0.5)'), { r: 10, g: 20, b: 30, alpha: 0.5 })
-  assert.deepEqual(parseCssColor('rgb(10 20 30 / 50%)'), { r: 10, g: 20, b: 30, alpha: 0.5 })
-  assert.deepEqual(parseCssColor('#fff'), { r: 255, g: 255, b: 255, alpha: 1 })
-  assert.deepEqual(parseCssColor('#1a2b3c'), { r: 26, g: 43, b: 60, alpha: 1 })
-  for (const junk of ['', 'transparent', 'var(--x)', null, undefined, 'rgb(1,2)']) {
-    assert.equal(parseCssColor(junk), null, String(junk))
-  }
-  assert.ok(relativeLuminance({ r: 255, g: 255, b: 255 }) > 0.99)
-  assert.equal(relativeLuminance({ r: 0, g: 0, b: 0 }), 0)
-})
-
-test('theme detection prefers an explicit marker over the OS preference', () => {
-  const makeDoc = ({ marker = null, bodyBackground = 'rgb(255,255,255)', prefersDark = false }) => ({
-    documentElement: {
-      getAttribute: (name) => (name === 'data-theme' ? marker : null),
-      className: '',
-    },
-    body: {},
-    defaultView: {
-      getComputedStyle: () => ({ backgroundColor: bodyBackground }),
-      matchMedia: () => ({ matches: prefersDark }),
-    },
-  })
-
-  assert.equal(detectTheme(makeDoc({ marker: 'dark' })), 'dark')
-  assert.equal(detectTheme(makeDoc({ marker: 'light', prefersDark: true })), 'light')
-  assert.equal(detectTheme(makeDoc({ bodyBackground: 'rgb(20, 20, 20)' })), 'dark')
-  assert.equal(detectTheme(makeDoc({ bodyBackground: 'rgb(250, 250, 250)' })), 'light')
-  // A transparent body tells us nothing, so the OS preference decides.
-  assert.equal(detectTheme(makeDoc({ bodyBackground: 'rgba(0, 0, 0, 0)', prefersDark: true })), 'dark')
-  assert.equal(detectTheme(undefined), 'light')
+test('the tile stacks above conversation content but below DSH menus', () => {
+  // Code blocks and tool cards use z-index 1..12, and DSH's own modal/menu layer
+  // starts at 1000. The tile has to sit between the two: high enough not to be
+  // covered by a code block, low enough that opening a menu still covers it.
+  assert.ok(TILE_Z_INDEX > 12, `tile z-index ${TILE_Z_INDEX} would be covered by code blocks`)
+  assert.ok(TILE_Z_INDEX < 1000, `tile z-index ${TILE_Z_INDEX} would cover DSH menus and modals`)
 })
 
 test('tile geometry keeps the tile inside the viewport', () => {
   const viewport = { width: 1200, height: 800 }
-  const size = { width: 268, height: 200 }
+  const size = { width: 300, height: 200 }
 
   assert.deepEqual(clampTilePosition({ x: -50, y: -50 }, size, viewport), { x: 4, y: 4 })
-  assert.deepEqual(clampTilePosition({ x: 9999, y: 9999 }, size, viewport), { x: 928, y: 596 })
+  assert.deepEqual(clampTilePosition({ x: 9999, y: 9999 }, size, viewport), { x: 896, y: 596 })
 
   const resting = defaultTilePosition(size, viewport)
-  assert.equal(resting.x, 1200 - 268 - 20)
+  assert.equal(resting.x, 1200 - 300 - 20)
   assert.equal(resting.y, 76)
   // A viewport narrower than the tile must not produce a negative coordinate.
   const tiny = defaultTilePosition(size, { width: 200, height: 150 })
@@ -267,20 +255,34 @@ test('the view model formats every row for direct rendering', () => {
   assert.equal(cpu.valueText, '23%')
   assert.equal(cpu.severity, 'ok')
   assert.deepEqual(cpu.details.map((detail) => detail.text), ['81.9°C'])
+  assert.match(cpu.captionTitle, /AMD Ryzen 7 8845HS/, 'the untruncated model stays in the tooltip')
+  assert.match(cpu.captionTitle, /4 threads/)
 
   assert.equal(memory.label, 'MEM')
   assert.equal(memory.valueText, '61%')
-  assert.deepEqual(memory.details.map((detail) => detail.text), ['19.4 GB / 32.0 GB'])
+  assert.deepEqual(memory.details.map((detail) => detail.text), ['19.4/32.0 GB'])
 
   assert.equal(gpu0.label, 'GPU0', 'a multi-GPU machine numbers its rows')
   assert.equal(gpu0.caption, 'RTX 5070 Ti')
   assert.equal(gpu0.valueText, '42%')
-  assert.deepEqual(gpu0.details.map((detail) => detail.text), ['61°C', '4.0 GB / 12.0 GB'])
+  assert.deepEqual(gpu0.details.map((detail) => detail.text), ['61°C', '4.0/12.0 GB'])
 
   assert.equal(gpu1.label, 'GPU1')
-  assert.equal(gpu1.percent, null)
   assert.equal(gpu1.valueText, null, 'an unknown reading renders as "no data"')
   assert.deepEqual(gpu1.details, [])
+})
+
+test('a row carries text only — no gauge, bar or per-core series', () => {
+  // The tile is a readout: text fields and nothing a component would have to
+  // draw as a chart. A stray numeric field here is how a bar would creep back.
+  const row = buildViewModel(sampleSnapshot(), DEFAULT_OPTIONS).rows[0]
+  assert.deepEqual(
+    Object.keys(row).sort(),
+    ['caption', 'captionTitle', 'details', 'key', 'label', 'severity', 'valueText']
+  )
+  for (const value of [row.caption, row.valueText, ...row.details.map((detail) => detail.text)]) {
+    assert.equal(typeof value, 'string')
+  }
 })
 
 test('a single GPU is labelled GPU, not GPU0', () => {
@@ -305,21 +307,12 @@ test('the view model honors every display toggle', () => {
   assert.deepEqual(noTemperatures.rows[0].details, [])
   assert.deepEqual(
     noTemperatures.rows[2].details.map((detail) => detail.text),
-    ['4.0 GB / 12.0 GB'],
+    ['4.0/12.0 GB'],
     'VRAM survives when only temperature is off'
   )
 
   const withPower = buildViewModel(sampleSnapshot(), { ...DEFAULT_OPTIONS, showPower: true })
   assert.equal(withPower.rows[2].details.at(-1).text, '88.5 W')
-
-  const withCores = buildViewModel(sampleSnapshot(), { ...DEFAULT_OPTIONS, showPerCore: true })
-  assert.deepEqual(withCores.rows[0].perCore, [10, 90, 50, 0])
-  assert.equal(withCores.rows[0].cores, 4)
-  assert.deepEqual(withCores.rows[0].details.map((detail) => detail.text), ['81.9°C'])
-
-  const withoutCores = buildViewModel(sampleSnapshot(), DEFAULT_OPTIONS)
-  assert.equal(withoutCores.rows[0].perCore, null)
-  assert.equal(withoutCores.rows[0].cores, null)
 })
 
 test('a missing or malformed snapshot renders as "not ok" instead of throwing', () => {
@@ -343,7 +336,8 @@ test('both dictionaries stay in sync and format placeholders', () => {
   assert.equal(format('{a} and {b}', { b: 2, a: 1 }), '1 and 2')
   assert.equal(format('no placeholders'), 'no placeholders')
   assert.equal(format('{missing}', {}), '{missing}')
-  assert.equal(bindDictionary(zh)('cores', { n: 8 }), '8 核')
+  assert.equal(bindDictionary(zh)('intervalSecond', { n: 2 }), '2 秒')
+  assert.equal(bindDictionary(en)('intervalSecond', { n: 2 }), '2s')
   assert.equal(bindDictionary(en)('doesNotExist'), 'doesNotExist')
 })
 

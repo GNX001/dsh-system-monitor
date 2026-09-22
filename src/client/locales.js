@@ -23,7 +23,6 @@ export const zh = {
   showGpuTemperature: 'GPU 温度',
   showGpuMemory: '显存',
   showPower: 'GPU 功耗',
-  showPerCore: '每核心占用',
   appearance: '外观',
   compact: '紧凑模式',
   resetPosition: '重置位置',
@@ -37,11 +36,9 @@ export const zh = {
   loading: '读取中…',
   offline: '无法连接宿主，重试中',
   noGpu: '未检测到 GPU',
-  unavailable: '无数据',
   updatedAt: '更新于 {time}',
   never: '尚未更新',
   hostUnavailable: '宿主插件未响应',
-  cores: '{n} 核',
   pluginsDisabled: '不支持此界面',
 }
 
@@ -63,7 +60,6 @@ export const en = {
   showGpuTemperature: 'GPU temperature',
   showGpuMemory: 'VRAM',
   showPower: 'GPU power draw',
-  showPerCore: 'Per-core usage',
   appearance: 'Appearance',
   compact: 'Compact mode',
   resetPosition: 'Reset position',
@@ -77,11 +73,9 @@ export const en = {
   loading: 'Reading…',
   offline: 'Host unreachable, retrying',
   noGpu: 'No GPU detected',
-  unavailable: 'No data',
   updatedAt: 'Updated {time}',
   never: 'Not updated yet',
   hostUnavailable: 'Host plugin not answering',
-  cores: '{n} cores',
   pluginsDisabled: 'Not supported in this interface',
 }
 

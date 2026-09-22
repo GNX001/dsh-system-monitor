@@ -4,38 +4,35 @@ English | [中文](README.zh.md)
 
 A floating system-monitor tile for the **DeepSeek Harness** web GUI: live CPU,
 memory and every GPU on the machine — utilization, temperature, VRAM and power
-draw — in one draggable glass tile that stays out of the way.
+draw — as a plain-text readout in a draggable tile that stays out of the way.
 
 ```
-┌──────────────────────────────────────┐
-│ ⣿  SYSTEM MONITOR        ⟳   ⌄   ✕  │   ← drag anywhere
-├──────────────────────────────────────┤
-│ CPU  Ryzen 7 8845HS            23%   │
-│ ▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░          │
-│ 81.9°C                               │
-│ MEM                            61%   │
-│ ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░          │
-│ 19.4 GB / 32.0 GB                    │
-│ GPU  RTX 5070 Ti               42%   │
-│ ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░          │
-│ 61°C    4.0 GB / 12.0 GB             │
-│ ● dev-box            Updated 04:31   │
-└──────────────────────────────────────┘
+  ⣿  SYSTEM MONITOR              ⟳   ⌄   ✕      ← drag the header
+  ─────────────────────────────────────────────
+  CPU  Ryzen 9 8940HX      9.6%   78.9°C
+  MEM                       43%   13.4/31.2 GB
+  GPU  RTX 5070 Ti           0%   51°C   0/11.9 GB
+  ● dev-box                         Updated 04:31
 ```
 
-*(A layout sketch, not a screenshot — the tile is rendered by your own theme, so
-its exact colors follow your DSH appearance settings.)*
+*(A layout sketch, not a screenshot. The real colors come from your DSH theme —
+see [Theming and stacking](#theming-and-stacking).)*
 
 ## Features
 
-- **CPU** — aggregate and per-core utilization, plus a CPU temperature where the
-  platform exposes one.
-- **Memory** — used / total and a load bar, using the same "available" accounting
+- **Text only** — one aligned line per metric: label, name, headline value, then
+  trailing details. No bars, gauges or sparklines; it is a readout, not a chart.
+- **CPU** — utilization, plus a CPU temperature where the platform exposes one.
+  The full model name and thread count live in the row's tooltip.
+- **Memory** — used/total in a shared unit, using the same "available" accounting
   Windows Task Manager and macOS Activity Monitor show.
 - **Every GPU** — one row per adapter with utilization, temperature, VRAM used /
   total and (optionally) power draw. A hybrid laptop reports both the discrete
   and the integrated GPU.
-- **Floating and draggable** — park it anywhere; the position, size, opacity and
+- **Follows your DSH theme** — every color is a DSH design token, so the tile
+  matches the built-in light/dark switch and third-party themes such as
+  Catppuccin, and re-tints the instant you change theme.
+- **Floating and draggable** — park it anywhere; the position, opacity and
   visible sections persist across reloads.
 - **Honest about missing data** — a counter the platform does not implement shows
   `—`, never a fabricated `0`. The tile is resilient: a missing vendor tool
@@ -119,9 +116,25 @@ widget:
 | Opacity | 94 % | 40 % – 100 % |
 | CPU / CPU temperature / Memory / GPU | on | Section visibility |
 | GPU temperature / VRAM / power draw | temp + VRAM on, power off | |
-| Per-core usage | off | Adds a per-core bar strip |
 | Compact mode | off | Tighter rows |
 | Reset position / Restore defaults | — | |
+
+## Theming and stacking
+
+**Colors.** The tile owns no palette. Every color is a DSH design token
+(`--dsw-alias-bg-layer-2`, `--dsw-alias-label-primary`, `--dsw-alias-state-warn-primary`,
+…), which the theme plugin declares on `body` for the light theme and on
+`body[data-ds-dark-theme]` for the dark one. The tile is a child of `body`, so it
+inherits those declarations and the browser re-resolves them the moment the theme
+changes — no listener, no re-render, and third-party themes such as Catppuccin
+and neu-theme are followed because they rewrite the same tokens. Each reference
+carries a literal fallback, so the tile still renders where the tokens are absent.
+
+**Stacking.** The tile is fixed at `z-index: 900`. That has to sit between two
+layers: conversation content (code blocks and tool cards use `z-index: 1`–`12`,
+and because none of their ancestors creates a stacking context they paint over a
+`z-index: auto` fixed element) and DSH's own menus and modals (`1000`+). So the
+tile covers a code block, and opening a menu still covers the tile.
 
 ## Configuration
 
@@ -315,8 +328,13 @@ suites into a single process instead.
 `npm run dev` mounts the real host half on `http://127.0.0.1:43199/` and serves a
 page that boots the real `lib/client.js` with the same `__ModuleLoader__`
 contract the shell uses — so the tile can be exercised against actual hardware
-without installing into a DSH profile and restarting the app. It is a development
-tool and is not part of the published package.
+without installing into a DSH profile and restarting the app. The page inlines
+the shell's **own** `:root` / `body` / `body[data-ds-dark-theme]` rule blocks
+(extracted from `@deepseek-ai/dsh-client-ui-theme`, overridable with
+`DSM_THEME_CLIENT`) and offers a theme toggle, so the token-following behaviour
+can be checked for real rather than taken on trust. It also prints the tile's
+rows as text on startup, which is the quickest way to read the layout without a
+browser. It is a development tool and is not part of the published package.
 
 The host half (`lib/index.js` and `lib/metrics/**`) is plain ESM and needs no
 build. Only the browser half is bundled, because the DSH client module system

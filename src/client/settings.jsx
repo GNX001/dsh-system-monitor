@@ -11,7 +11,6 @@ const TOGGLES = [
   ['showGpuTemperature', 'showGpuTemperature'],
   ['showGpuMemory', 'showGpuMemory'],
   ['showPower', 'showPower'],
-  ['showPerCore', 'showPerCore'],
 ]
 
 /**

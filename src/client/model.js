@@ -1,11 +1,10 @@
 /**
  * Pure client-half logic: option normalization/persistence, value formatting,
- * theme detection, tile geometry, and the snapshot → view-model reduction.
+ * tile geometry, and the snapshot → view-model reduction.
  *
- * Everything here is framework-free and DOM-free except `detectTheme`, which
- * takes the document as an argument. The React components in `tile.jsx` render
- * the view model this module produces, so all formatting and severity rules are
- * unit-testable without a renderer.
+ * Everything here is framework-free and DOM-free. The React components in
+ * `tile.jsx` render the view model this module produces, so all formatting and
+ * severity rules are unit-testable without a renderer.
  */
 
 /** Storage key for the persisted tile options. */
@@ -31,7 +30,6 @@ export const DEFAULT_OPTIONS = Object.freeze({
   showGpuTemperature: true,
   showGpuMemory: true,
   showPower: false,
-  showPerCore: false,
 })
 
 const MIN_OPACITY = 0.4
@@ -220,93 +218,6 @@ export function createOptionsStore(options = {}) {
 }
 
 /**
- * Resolve the app's current theme.
- *
- * The DSH web shell paints its own background and the tile sits on top of it, so
- * `prefers-color-scheme` alone is wrong whenever the user picked a theme in
- * Settings that differs from the OS. The order of evidence is therefore:
- * an explicit theme attribute on `<html>`, then the measured luminance of the
- * body background, then the OS preference.
- *
- * @param doc - a Document (defaults to the page document).
- * @returns `'dark'` or `'light'`.
- */
-export function detectTheme(doc) {
-  const fallback = () => {
-    try {
-      return doc?.defaultView?.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
-    } catch {
-      return 'light'
-    }
-  }
-  if (doc === undefined || doc === null) return 'light'
-
-  const root = doc.documentElement
-  const marker = [root?.getAttribute?.('data-theme'), root?.getAttribute?.('data-color-mode'), root?.className]
-    .filter((value) => typeof value === 'string')
-    .join(' ')
-    .toLowerCase()
-  if (/(^|[^a-z])dark([^a-z]|$)/.test(marker)) return 'dark'
-  if (/(^|[^a-z])light([^a-z]|$)/.test(marker)) return 'light'
-
-  const background = doc.defaultView?.getComputedStyle?.(doc.body ?? root)?.backgroundColor
-  const rgb = parseCssColor(background)
-  if (rgb !== null && rgb.alpha > 0.05) return relativeLuminance(rgb) < 0.5 ? 'dark' : 'light'
-
-  return fallback()
-}
-
-/** Parse `rgb()` / `rgba()` / `#rrggbb` into channel values, or null. */
-export function parseCssColor(value) {
-  if (typeof value !== 'string') return null
-  const text = value.trim()
-  const rgbMatch = /^rgba?\(([^)]+)\)$/i.exec(text)
-  if (rgbMatch !== null) {
-    const parts = rgbMatch[1]
-      .split(/[,\s/]+/)
-      .map((part) => part.trim())
-      .filter((part) => part !== '')
-    if (parts.length < 3) return null
-    const channels = parts.slice(0, 3).map((part) => (part.endsWith('%') ? (Number.parseFloat(part) / 100) * 255 : Number(part)))
-    if (channels.some((channel) => !Number.isFinite(channel))) return null
-    return { r: channels[0], g: channels[1], b: channels[2], alpha: parseAlpha(parts[3]) }
-  }
-  const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text)
-  if (hexMatch !== null) {
-    const hex = hexMatch[1]
-    const full = hex.length === 3 ? hex.split('').map((char) => char + char).join('') : hex
-    return {
-      r: Number.parseInt(full.slice(0, 2), 16),
-      g: Number.parseInt(full.slice(2, 4), 16),
-      b: Number.parseInt(full.slice(4, 6), 16),
-      alpha: 1,
-    }
-  }
-  return null
-}
-
-/**
- * Alpha accepts both the legacy `0.5` form and the modern `/ 50%` form, and
- * only the units digit is captured by the channel split, so a trailing `%` must
- * be handled here rather than falling back to fully opaque.
- */
-function parseAlpha(part) {
-  if (part === undefined) return 1
-  const alpha = part.endsWith('%') ? Number.parseFloat(part) / 100 : Number(part)
-  if (!Number.isFinite(alpha)) return 1
-  return Math.min(1, Math.max(0, alpha))
-}
-
-/** WCAG relative luminance of an RGB triple (0 = black, 1 = white). */
-export function relativeLuminance(color) {
-  const channel = (value) => {
-    const scaled = Math.min(1, Math.max(0, value / 255))
-    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
-  }
-  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b)
-}
-
-/**
  * Clamp a dragged position so the tile stays fully inside the viewport.
  * @param position - the requested `{x, y}`.
  * @param size - the tile's `{width, height}`.
@@ -343,6 +254,29 @@ export function formatBytes(bytes) {
   const mib = bytes / 1024 ** 2
   if (mib >= 1) return `${mib.toFixed(0)} MB`
   return `${Math.round(bytes / 1024)} KB`
+}
+
+/**
+ * Format a used/total pair in **one shared unit**, which is how a system monitor
+ * writes it (`13.4/31.2 GB`). Sharing the unit keeps the line short on a 300px
+ * tile and removes the ambiguity of comparing `0 KB` against `11.9 GB`.
+ * A zero used-count prints as a bare `0` rather than `0.0`.
+ *
+ * @returns e.g. `"13.4/31.2 GB"`, or a single formatted value when the total is
+ *   unusable.
+ */
+export function formatBytePair(usedBytes, totalBytes) {
+  if (!Number.isFinite(totalBytes) || totalBytes <= 0) return formatBytes(usedBytes)
+  const gib = totalBytes / 1024 ** 3
+  const useGib = gib >= 1
+  const scale = useGib ? 1024 ** 3 : 1024 ** 2
+  const unit = useGib ? 'GB' : 'MB'
+  const digits = useGib && gib < 100 ? 1 : 0
+  const one = (bytes) => {
+    if (!Number.isFinite(bytes)) return '—'
+    return bytes === 0 ? '0' : (bytes / scale).toFixed(digits)
+  }
+  return `${one(usedBytes)}/${one(totalBytes)} ${unit}`
 }
 
 /** Format a percentage, keeping one decimal only below 10%. */
@@ -414,8 +348,10 @@ export function shortGpuName(name) {
 /**
  * Reduce a host snapshot to the rows the tile paints.
  *
- * This is the whole display contract: every string is already formatted and
- * every severity already decided, so `tile.jsx` only maps over `rows`.
+ * This is the whole display contract, and it is deliberately **text-only**: each
+ * row carries a short label, an optional caption, one right-aligned headline
+ * value, and a list of trailing detail strings. `tile.jsx` sets them side by side
+ * and adds no gauges, bars or charts — the tile is a readout, not a dashboard.
  *
  * @param snapshot - the payload from `/api/dsh-system-monitor/snapshot`.
  * @param options - resolved tile options.
@@ -444,23 +380,24 @@ export function buildViewModel(snapshot, options) {
   }
 }
 
-/** Build the CPU row. */
+/** Build the CPU row: utilization, temperature, and the core count as a tooltip. */
 function cpuRow(cpu, options) {
   if (cpu === null || typeof cpu !== 'object') return null
   const details = []
   if (options.showCpuTemperature !== false && Number.isFinite(cpu.temperature)) {
     details.push({ key: 'temp', text: formatTemperature(cpu.temperature), tone: temperatureSeverity(cpu.temperature) })
   }
+  const cores = Number.isFinite(cpu.cores) ? cpu.cores : null
+  const model = typeof cpu.model === 'string' ? cpu.model.trim() : ''
   return {
     key: 'cpu',
     label: 'CPU',
     caption: shortCpuName(cpu.model),
-    percent: Number.isFinite(cpu.usage) ? cpu.usage : null,
+    // The full model string and core count live in the tooltip, so the visible
+    // line stays short without throwing the information away.
+    captionTitle: [model, cores === null ? null : `${cores} threads`].filter(Boolean).join(' · '),
     valueText: formatPercent(cpu.usage),
     severity: severityOf(cpu.usage),
-    perCore: options.showPerCore === true && Array.isArray(cpu.perCore) ? cpu.perCore : null,
-    // A bare count: the unit is localized by the component, not here.
-    cores: options.showPerCore === true && Number.isFinite(cpu.cores) ? cpu.cores : null,
     details,
   }
 }
@@ -468,19 +405,16 @@ function cpuRow(cpu, options) {
 /** Build the memory row. */
 function memoryRow(memory) {
   if (memory === null || typeof memory !== 'object') return null
-  const used = formatBytes(memory.usedBytes)
-  const total = formatBytes(memory.totalBytes)
+  const size = formatBytePair(memory.usedBytes, memory.totalBytes)
   const details = []
-  if (used !== null && total !== null) details.push({ key: 'size', text: `${used} / ${total}`, tone: 'muted' })
+  if (size !== null) details.push({ key: 'size', text: size, tone: 'muted' })
   return {
     key: 'memory',
     label: 'MEM',
     caption: null,
-    percent: Number.isFinite(memory.usage) ? memory.usage : null,
+    captionTitle: null,
     valueText: formatPercent(memory.usage),
     severity: severityOf(memory.usage),
-    perCore: null,
-    cores: null,
     details,
   }
 }
@@ -493,9 +427,8 @@ function gpuRow(gpu, options, index, total) {
     details.push({ key: 'temp', text: formatTemperature(gpu.temperature), tone: temperatureSeverity(gpu.temperature) })
   }
   if (options.showGpuMemory !== false && gpu.memory !== null && typeof gpu.memory === 'object') {
-    const used = formatBytes(gpu.memory.usedBytes)
-    const capacity = formatBytes(gpu.memory.totalBytes)
-    if (used !== null) details.push({ key: 'vram', text: capacity === null ? used : `${used} / ${capacity}`, tone: 'muted' })
+    const size = formatBytePair(gpu.memory.usedBytes, gpu.memory.totalBytes)
+    if (size !== null) details.push({ key: 'vram', text: size, tone: 'muted' })
   }
   if (options.showPower === true && Number.isFinite(gpu.powerWatts)) {
     details.push({ key: 'power', text: formatWatts(gpu.powerWatts), tone: 'muted' })
@@ -504,11 +437,9 @@ function gpuRow(gpu, options, index, total) {
     key: `gpu-${gpu.index ?? index}`,
     label: total > 1 ? `GPU${gpu.index ?? index}` : 'GPU',
     caption: shortGpuName(gpu.name) ?? 'GPU',
-    percent: Number.isFinite(gpu.usage) ? gpu.usage : null,
+    captionTitle: typeof gpu.name === 'string' ? gpu.name : null,
     valueText: formatPercent(gpu.usage),
     severity: severityOf(gpu.usage),
-    perCore: null,
-    cores: null,
     details,
   }
 }

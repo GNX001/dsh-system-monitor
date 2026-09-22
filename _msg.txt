@@ -1,0 +1,39 @@
+v0.2.0: text-only readout, DSH theme tokens, and a stacking fix
+
+Three fixes after seeing the tile in the real GUI.
+
+z-index (the tile was covered by code blocks)
+- The tile declared no z-index, so `position: fixed` with `z-index: auto` lost to
+  conversation content painting at z-index 1..12: none of those ancestors creates
+  a stacking context, so they win over an auto fixed element. It now declares
+  z-index 900 — above all content, below DSH's own 1000/1100 menu and modal
+  layer, so opening a menu still covers the tile instead of fighting it.
+- Guarded by a test asserting the level sits inside that window.
+
+Text-only (no progress bars)
+- A row is now a single aligned line: label, caption, headline value, then
+  trailing details. The bar, the bar fill, the per-core strip and the
+  showPerCore option are gone.
+- The view model no longer carries numeric fields a component would draw from; a
+  test pins the row key set so a gauge cannot creep back.
+- Memory and VRAM print as a shared-unit pair ("13.4/31.2 GB"), which also fixes
+  a zero reading rendering as "0 KB/11.9 GB".
+- The full CPU model name and thread count moved into the row tooltip.
+
+Theme following
+- The tile no longer ships a hardcoded light/dark palette. Every color is a DSH
+  design token (--dsw-alias-*), which the theme plugin declares on `body` (light)
+  and `body[data-ds-dark-theme]` (dark). The tile is a child of body, so it
+  inherits them and re-tints on a theme change with no JavaScript at all, and
+  third-party themes (Catppuccin, neu-theme) are followed because they rewrite
+  the same tokens. Each reference keeps a literal fallback.
+- Removed the theme detection this made unnecessary: detectTheme, parseCssColor,
+  relativeLuminance and their tests.
+
+Dev harness
+- The preview page now inlines the shell's own :root / body /
+  body[data-ds-dark-theme] blocks, extracted from dsh-client-ui-theme, plus a
+  theme toggle — so token-following can be checked for real without restarting
+  DSH. It also prints the tile's rows as text on startup.
+
+115 tests pass.

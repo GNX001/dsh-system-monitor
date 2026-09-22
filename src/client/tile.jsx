@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { buildViewModel, clampTilePosition, defaultTilePosition, detectTheme } from './model.js'
+import { buildViewModel, clampTilePosition, defaultTilePosition } from './model.js'
 
 /** Subscribe a component to the shared options store. */
 export function useOptions(store) {
@@ -25,9 +25,8 @@ export function Tile({ store, t, client }) {
   const [snapshot, setSnapshot] = useState(null)
   const [status, setStatus] = useState('loading')
   const [request, setRequest] = useState({ id: 0, force: false })
-  const [theme, setTheme] = useState(() => detectTheme(globalThis.document))
   const [viewport, setViewport] = useState(() => readViewport())
-  const [measured, setMeasured] = useState({ width: 268, height: 120 })
+  const [measured, setMeasured] = useState({ width: 300, height: 120 })
   const [dragPosition, setDragPosition] = useState(null)
   const [dragging, setDragging] = useState(false)
 
@@ -75,25 +74,6 @@ export function Tile({ store, t, client }) {
   // --- environment tracking --------------------------------------------------
 
   useEffect(() => {
-    const update = () => setTheme(detectTheme(globalThis.document))
-    update()
-    const observer =
-      typeof MutationObserver === 'function' && globalThis.document?.documentElement
-        ? new MutationObserver(update)
-        : null
-    observer?.observe(globalThis.document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'data-theme', 'data-color-mode', 'style'],
-    })
-    const media = globalThis.matchMedia?.('(prefers-color-scheme: dark)')
-    media?.addEventListener?.('change', update)
-    return () => {
-      observer?.disconnect()
-      media?.removeEventListener?.('change', update)
-    }
-  }, [])
-
-  useEffect(() => {
     const onResize = () => {
       setViewport(readViewport())
       setDragPosition(null)
@@ -114,7 +94,7 @@ export function Tile({ store, t, client }) {
         ? previous
         : { width: rect.width, height: rect.height }
     )
-  }, [viewModel.rows.length, options.collapsed, options.compact, options.showPerCore, theme, status])
+  }, [viewModel.rows.length, options.collapsed, options.compact, status])
 
   // --- dragging --------------------------------------------------------------
 
@@ -182,7 +162,6 @@ export function Tile({ store, t, client }) {
     <section
       ref={tileRef}
       className="dsm-tile"
-      data-theme={theme}
       data-compact={options.compact === true ? '1' : '0'}
       data-dragging={dragging ? '1' : undefined}
       style={{ left: `${position.x}px`, top: `${position.y}px`, opacity: options.opacity }}
@@ -242,7 +221,7 @@ export function Tile({ store, t, client }) {
           {viewModel.ok !== true && status === 'error' ? <p className="dsm-note dsm-err">{t('hostUnavailable')}</p> : null}
 
           {viewModel.rows.map((row) => (
-            <Row key={row.key} row={row} t={t} />
+            <Row key={row.key} row={row} />
           ))}
 
           {viewModel.ok === true && options.showGpu === true && (snapshot?.gpus?.length ?? 0) === 0 ? (
@@ -262,53 +241,31 @@ export function Tile({ store, t, client }) {
   )
 }
 
-/** One metric row: label, caption, value, bar, and detail chips. */
-function Row({ row, t }) {
-  const percent = Number.isFinite(row.percent) ? Math.min(100, Math.max(0, row.percent)) : null
+/**
+ * One metric line: label, caption, headline value, then trailing details.
+ *
+ * Text only — no bar, gauge or sparkline. Everything is on a single baseline row
+ * so the numeric columns line up down the tile; the caption is the only element
+ * allowed to shrink, and its full text stays reachable through the tooltip.
+ */
+function Row({ row }) {
   return (
     <div className="dsm-row">
-      <div className="dsm-row-head">
-        <span className="dsm-label">{row.label}</span>
-        <span className="dsm-caption" title={row.caption ?? undefined}>
-          {row.caption ?? ''}
-        </span>
-        <span className="dsm-value">{row.valueText ?? t('unavailable')}</span>
-      </div>
-      <div
-        className="dsm-bar"
-        role="progressbar"
-        aria-label={row.label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent === null ? undefined : Math.round(percent)}
-      >
-        <div
-          className={`dsm-bar-fill dsm-${row.severity}`}
-          style={{ width: percent === null ? '0%' : `${percent}%` }}
-        />
-      </div>
-      {row.details.length > 0 || row.cores !== null ? (
-        <div className="dsm-details">
-          {row.details.map((detail) => (
-            <span key={detail.key} className={detail.tone === 'muted' || detail.tone === 'ok' ? undefined : `dsm-detail-${detail.tone}`}>
-              {detail.text}
-            </span>
-          ))}
-          {row.cores !== null ? <span>{t('cores', { n: row.cores })}</span> : null}
-        </div>
-      ) : null}
-      {Array.isArray(row.perCore) && row.perCore.length > 1 ? (
-        <div className="dsm-cores" aria-hidden="true">
-          {row.perCore.map((core, index) => (
-            <span className="dsm-core" key={index}>
-              <i
-                className={`dsm-${core === null ? 'unknown' : core >= 90 ? 'hot' : core >= 70 ? 'warn' : 'ok'}`}
-                style={{ height: `${core === null ? 0 : Math.max(8, Math.min(100, core))}%` }}
-              />
-            </span>
-          ))}
-        </div>
-      ) : null}
+      <span className="dsm-label">{row.label}</span>
+      <span className="dsm-caption" title={row.captionTitle ?? undefined}>
+        {row.caption ?? ''}
+      </span>
+      <span className="dsm-readout">
+        <span className={`dsm-value dsm-${row.severity}`}>{row.valueText ?? '—'}</span>
+        {row.details.map((detail) => (
+          <span
+            key={detail.key}
+            className={detail.tone === 'muted' || detail.tone === 'ok' ? 'dsm-detail' : `dsm-detail dsm-${detail.tone}`}
+          >
+            {detail.text}
+          </span>
+        ))}
+      </span>
     </div>
   )
 }

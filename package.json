@@ -1,6 +1,6 @@
 {
   "name": "dsh-system-monitor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DeepSeek Harness 系统监视悬浮磁贴插件：CPU / 内存 / 多 GPU 的占用率、温度、显存与功耗实时显示。A floating system-monitor tile plugin for DeepSeek Harness: live CPU, memory and multi-GPU usage, temperature, VRAM and power draw.",
   "type": "module",
   "main": "lib/index.js",

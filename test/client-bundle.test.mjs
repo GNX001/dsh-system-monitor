@@ -191,10 +191,8 @@ function createClientCtx() {
 }
 
 /** Mount the tile against a stubbed host route. */
-async function mount({ options, payload = snapshot(), status = 200, dark = false } = {}) {
+async function mount({ options, payload = snapshot(), status = 200 } = {}) {
   document.body.innerHTML = ''
-  document.documentElement.removeAttribute('data-theme')
-  if (dark) document.documentElement.setAttribute('data-theme', 'dark')
   window.localStorage.clear()
   if (options !== undefined) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(options))
 
@@ -251,7 +249,6 @@ test('the tile mounts into the document body and renders real readings', async (
 
   assert.ok(container, 'a body-attached container is created')
   assert.ok(tile(), 'the tile is rendered')
-  assert.equal(tile().getAttribute('data-theme'), 'light')
   assert.equal(document.querySelector('.dsm-title').textContent, '系统监视')
 
   for (const label of ['CPU', 'MEM', 'GPU']) {
@@ -265,11 +262,56 @@ test('the tile mounts into the document body and renders real readings', async (
   assert.match(text(), /42%/, 'GPU utilization')
   assert.match(text(), /81\.9°C/, 'CPU temperature')
   assert.match(text(), /61°C/, 'GPU temperature')
-  assert.match(text(), /19\.4 GB \/ 32\.0 GB/, 'memory size')
-  assert.match(text(), /4\.0 GB \/ 12\.0 GB/, 'VRAM')
+  assert.match(text(), /19\.4\/32\.0 GB/, 'memory size')
+  assert.match(text(), /4\.0\/12\.0 GB/, 'VRAM')
   assert.match(text(), /Ryzen 7 8845HS/, 'shortened CPU name')
   assert.match(text(), /RTX 5070 Ti/, 'shortened GPU name')
   assert.match(text(), /dev-box/, 'the footer names the host')
+})
+
+test('the tile renders text only — no bar or progress widget', async () => {
+  const { tile } = await mount()
+
+  // The user asked for a pure readout; a progress bar is the obvious way for one
+  // to creep back in, so assert on both the markup and the stylesheet.
+  assert.equal(tile().querySelectorAll('[role="progressbar"]').length, 0)
+  for (const selector of ['.dsm-bar', '.dsm-bar-fill', '.dsm-cores', '.dsm-core']) {
+    assert.equal(tile().querySelectorAll(selector).length, 0, `${selector} must not exist`)
+  }
+  const css = document.getElementById('dsh-system-monitor-styles').textContent
+  assert.doesNotMatch(css, /dsm-bar/, 'no bar rules may ship')
+  assert.doesNotMatch(css, /width:\s*\d+%/, 'no percentage-width fill may ship')
+})
+
+test('the tile colors itself from DSH theme tokens, so a theme switch follows', async () => {
+  await mount()
+  const css = document.getElementById('dsh-system-monitor-styles').textContent
+
+  // Every themed color must resolve through a --dsw-alias-* token with a literal
+  // fallback, which is what makes the tile follow Catppuccin, neu-theme, and the
+  // built-in light/dark switch without any JavaScript.
+  for (const token of [
+    '--dsw-alias-bg-layer-2',
+    '--dsw-alias-bg-layer-3',
+    '--dsw-alias-label-primary',
+    '--dsw-alias-label-secondary',
+    '--dsw-alias-label-tertiary',
+    '--dsw-alias-border-l2',
+    '--dsw-alias-state-success-primary',
+    '--dsw-alias-state-warn-primary',
+    '--dsw-alias-state-error-primary',
+  ]) {
+    assert.ok(css.includes(`var(${token}`), `missing a var() reference to ${token}`)
+  }
+  // A hardcoded palette is the bug this replaced: no bare hex surface.
+  assert.doesNotMatch(css, /--dsm-bg:#/, 'the surface must come from a token, not a hex literal')
+
+  // And the stacking level has to sit between conversation content and DSH's
+  // own menu/modal layer.
+  const zIndex = Number(/z-index:(\d+)/.exec(css)?.[1])
+  assert.ok(Number.isFinite(zIndex), 'the tile must declare an explicit z-index')
+  assert.ok(zIndex > 12, `z-index ${zIndex} would be covered by a code block`)
+  assert.ok(zIndex < 1000, `z-index ${zIndex} would cover DSH menus`)
 })
 
 test('the tile polls the host route and only forces a re-probe on demand', async () => {
@@ -322,9 +364,20 @@ test('hiding the tile removes it and persists the choice', async () => {
   assert.match(window.localStorage.getItem(STORAGE_KEY), /"enabled":false/)
 })
 
-test('a persisted dark theme is picked up from the document', async () => {
-  const { tile } = await mount({ dark: true })
-  assert.equal(tile().getAttribute('data-theme'), 'dark')
+test('a theme switch needs no re-render: the body attribute tints the tile', async () => {
+  const { tile } = await mount()
+  const css = document.getElementById('dsh-system-monitor-styles').textContent
+
+  // DSH puts the dark palette on body[data-ds-dark-theme] and the light one on
+  // body. Both are ancestors of the tile, so flipping the attribute re-resolves
+  // every var() with the tile untouched — no listener, no re-render.
+  document.body.setAttribute('data-ds-dark-theme', '')
+  assert.ok(document.body.contains(tile()), 'the tile lives under body, where the tokens are declared')
+  assert.ok(
+    css.includes('--dsm-bg:var(--dsw-alias-bg-layer-2'),
+    'the surface must be a token reference so both palettes apply'
+  )
+  document.body.removeAttribute('data-ds-dark-theme')
 })
 
 test('the stylesheet is injected exactly once across mounts', async () => {
